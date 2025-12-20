@@ -330,10 +330,28 @@ This is correct quantum behavior—the correlations that defined the entanglemen
 - **math.js** for complex number operations
 - No build system required—runs directly in browser
 
+## Acknowledgments
+
+The entanglement visualization style in MEQANIC—featuring colorful oscillating arcs that become more chaotic with higher entanglement entropy—is directly inspired by the **Quantum Intuition XR** project:
+
+> **Quantum Intuition XR: Embodied Learning of Quantum Entanglement and Measurement with an XR Serious Game**
+>
+> Samantha Norris, Charles Tahan, et al.
+>
+> arXiv:2504.08984 (2025)
+>
+> https://arxiv.org/abs/2504.08984
+
+The paper presents an immersive XR experience for teaching quantum mechanics concepts. Figure 5 in the paper shows the entanglement visualization that inspired MEQANIC's oscillating arc design, where:
+- Multiple wavy lines connect entangled qubits
+- Line intensity and chaos increase with entanglement entropy S₂(ρ)
+- The visual language makes the abstract concept of entanglement tangible
+
 ## References
 
-- Nielsen & Chuang, *Quantum Computation and Quantum Information*
-- [Quantum Intuition XR](https://arxiv.org/abs/2504.08984) - Inspiration for entanglement visualization style
+- **Quantum Intuition XR** - Norris, Tahan, et al. [arXiv:2504.08984](https://arxiv.org/abs/2504.08984) (2025) - Primary inspiration for entanglement visualization
+- Nielsen & Chuang, *Quantum Computation and Quantum Information* - Theoretical foundations
+- Wootters, W. K. "Entanglement of Formation of an Arbitrary State of Two Qubits" - Concurrence formula
 
 ---
 
