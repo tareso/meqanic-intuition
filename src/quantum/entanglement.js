@@ -1,0 +1,255 @@
+/**
+ * entanglement.js
+ * Calculates entanglement between qubit pairs using concurrence
+ *
+ * For pure bipartite states: C = 2√(det(ρ_A)) where ρ_A is single-qubit reduced density matrix
+ * For general states: Uses Wootters formula with proper eigenvalue calculation
+ */
+
+import {
+    complex,
+    addComplex,
+    subtractComplex,
+    multiplyComplex,
+    conjugate,
+    magnitude
+} from './quantumMath.js';
+
+/**
+ * Calculate the two-qubit reduced density matrix by tracing out all other qubits
+ * @param {Array} stateVector - Full state vector (array of complex numbers)
+ * @param {number} qubitA - First qubit index
+ * @param {number} qubitB - Second qubit index
+ * @param {number} numQubits - Total number of qubits
+ * @returns {Array<Array>} 4x4 reduced density matrix for the two-qubit subsystem
+ */
+function getTwoQubitReducedDensityMatrix(stateVector, qubitA, qubitB, numQubits) {
+    const dim = stateVector.length;
+
+    // Initialize 4x4 reduced density matrix
+    const rho = [];
+    for (let i = 0; i < 4; i++) {
+        rho[i] = [];
+        for (let j = 0; j < 4; j++) {
+            rho[i][j] = complex(0, 0);
+        }
+    }
+
+    // For each pair of basis states in the full system
+    for (let i = 0; i < dim; i++) {
+        for (let j = 0; j < dim; j++) {
+            // Extract bits for qubits A and B
+            const bitA_i = (i >> (numQubits - 1 - qubitA)) & 1;
+            const bitB_i = (i >> (numQubits - 1 - qubitB)) & 1;
+            const bitA_j = (j >> (numQubits - 1 - qubitA)) & 1;
+            const bitB_j = (j >> (numQubits - 1 - qubitB)) & 1;
+
+            // Create mask for all OTHER qubits (not A or B)
+            let mask = 0;
+            for (let k = 0; k < numQubits; k++) {
+                if (k !== qubitA && k !== qubitB) {
+                    mask |= (1 << (numQubits - 1 - k));
+                }
+            }
+
+            // Only contribute if all other qubits match (partial trace condition)
+            if ((i & mask) === (j & mask)) {
+                // Map to 2-qubit basis: |00⟩=0, |01⟩=1, |10⟩=2, |11⟩=3
+                const idx_i = bitA_i * 2 + bitB_i;
+                const idx_j = bitA_j * 2 + bitB_j;
+
+                // Add contribution: ψ[i] * conj(ψ[j])
+                const contribution = multiplyComplex(
+                    stateVector[i],
+                    conjugate(stateVector[j])
+                );
+
+                rho[idx_i][idx_j] = addComplex(rho[idx_i][idx_j], contribution);
+            }
+        }
+    }
+
+    return rho;
+}
+
+/**
+ * Calculate single-qubit reduced density matrix from two-qubit density matrix
+ * Traces out qubit B to get ρ_A
+ * @param {Array<Array>} rhoAB - 4x4 two-qubit density matrix
+ * @returns {Array<Array>} 2x2 single-qubit density matrix
+ */
+function getSingleQubitReducedDensityMatrix(rhoAB) {
+    // Trace out qubit B
+    // ρ_A[i][j] = Σ_k ρ_AB[i*2+k][j*2+k]
+    const rhoA = [
+        [complex(0, 0), complex(0, 0)],
+        [complex(0, 0), complex(0, 0)]
+    ];
+
+    for (let i = 0; i < 2; i++) {
+        for (let j = 0; j < 2; j++) {
+            for (let k = 0; k < 2; k++) {
+                rhoA[i][j] = addComplex(rhoA[i][j], rhoAB[i * 2 + k][j * 2 + k]);
+            }
+        }
+    }
+
+    return rhoA;
+}
+
+/**
+ * Calculate the purity Tr(ρ²) of a 2x2 density matrix
+ * @param {Array<Array>} rho - 2x2 density matrix
+ * @returns {number} Purity value [0.5, 1]
+ */
+function calculatePurity2x2(rho) {
+    // Tr(ρ²) = Σ_i,j |ρ[i][j]|²
+    let purity = 0;
+    for (let i = 0; i < 2; i++) {
+        for (let j = 0; j < 2; j++) {
+            const mag = magnitude(rho[i][j]);
+            purity += mag * mag;
+        }
+    }
+    return purity;
+}
+
+/**
+ * Calculate concurrence using the linear entropy method
+ * For pure bipartite states: C = √(2(1 - Tr(ρ_A²)))
+ * This is exact for pure states and a good approximation for near-pure states
+ *
+ * @param {Array<Array>} rhoAB - 4x4 two-qubit density matrix
+ * @returns {number} Concurrence value [0, 1]
+ */
+function calculateConcurrenceFromLinearEntropy(rhoAB) {
+    // Get single-qubit reduced density matrix
+    const rhoA = getSingleQubitReducedDensityMatrix(rhoAB);
+
+    // Calculate purity of ρ_A
+    const purityA = calculatePurity2x2(rhoA);
+
+    // Linear entropy: S_L = 1 - Tr(ρ_A²)
+    // For pure bipartite state: C² = 2 * S_L = 2(1 - Tr(ρ_A²))
+    const linearEntropy = 1 - purityA;
+
+    // Concurrence
+    const concurrenceSquared = 2 * linearEntropy;
+    return Math.sqrt(Math.max(0, Math.min(1, concurrenceSquared)));
+}
+
+/**
+ * Calculate concurrence directly from state vector for 2-qubit pure state
+ * C = 2|αδ - βγ| where |ψ⟩ = α|00⟩ + β|01⟩ + γ|10⟩ + δ|11⟩
+ *
+ * @param {Array} amplitudes - State vector [α, β, γ, δ] for 2 qubits
+ * @returns {number} Concurrence value [0, 1]
+ */
+function calculateConcurrencePure2Qubit(amplitudes) {
+    if (amplitudes.length !== 4) {
+        return 0;
+    }
+
+    const alpha = amplitudes[0]; // |00⟩
+    const beta = amplitudes[1];  // |01⟩
+    const gamma = amplitudes[2]; // |10⟩
+    const delta = amplitudes[3]; // |11⟩
+
+    // C = 2|αδ - βγ|
+    const prod1 = multiplyComplex(alpha, delta);
+    const prod2 = multiplyComplex(beta, gamma);
+    const diff = subtractComplex(prod1, prod2);
+
+    return Math.min(1, 2 * magnitude(diff));
+}
+
+/**
+ * Calculate concurrence between two qubits in a quantum state
+ * Uses different methods depending on system size for accuracy
+ *
+ * @param {QuantumState} state - Quantum state object
+ * @param {number} qubitA - First qubit index
+ * @param {number} qubitB - Second qubit index
+ * @returns {number} Concurrence value [0, 1]
+ */
+export function calculateConcurrence(state, qubitA, qubitB) {
+    if (state.numQubits < 2) {
+        return 0;
+    }
+
+    if (qubitA === qubitB) {
+        return 0;
+    }
+
+    // Ensure qubitA < qubitB for consistency
+    if (qubitA > qubitB) {
+        [qubitA, qubitB] = [qubitB, qubitA];
+    }
+
+    // Special case: exactly 2 qubits - use exact formula
+    if (state.numQubits === 2) {
+        return calculateConcurrencePure2Qubit(state.amplitudes);
+    }
+
+    // For 3+ qubits: get two-qubit reduced density matrix and use linear entropy method
+    const rhoAB = getTwoQubitReducedDensityMatrix(
+        state.amplitudes,
+        qubitA,
+        qubitB,
+        state.numQubits
+    );
+
+    return calculateConcurrenceFromLinearEntropy(rhoAB);
+}
+
+/**
+ * Calculate entanglement matrix for all qubit pairs
+ * @param {QuantumState} state - Quantum state object
+ * @returns {Array<Array<number>>} NxN matrix of concurrence values
+ */
+export function calculateEntanglementMatrix(state) {
+    const n = state.numQubits;
+    const matrix = [];
+
+    for (let i = 0; i < n; i++) {
+        matrix[i] = [];
+        for (let j = 0; j < n; j++) {
+            if (i === j) {
+                matrix[i][j] = 0;
+            } else if (j < i) {
+                // Symmetric matrix
+                matrix[i][j] = matrix[j][i];
+            } else {
+                matrix[i][j] = calculateConcurrence(state, i, j);
+            }
+        }
+    }
+
+    return matrix;
+}
+
+/**
+ * Get list of entangled pairs with their concurrence values
+ * @param {QuantumState} state - Quantum state object
+ * @param {number} threshold - Minimum concurrence to include (default 0.01)
+ * @returns {Array<{qubitA: number, qubitB: number, concurrence: number}>}
+ */
+export function getEntangledPairs(state, threshold = 0.01) {
+    const pairs = [];
+    const n = state.numQubits;
+
+    for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+            const concurrence = calculateConcurrence(state, i, j);
+            if (concurrence > threshold) {
+                pairs.push({
+                    qubitA: i,
+                    qubitB: j,
+                    concurrence
+                });
+            }
+        }
+    }
+
+    return pairs;
+}

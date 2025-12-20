@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="MEQANIC Intuition - Interactive quantum computing visualization for learning about qubits, superposition, and entanglement">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>MEQANIC Intuition - What it's like to be a qubit</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Math.js from CDN for complex number and matrix operations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
+</head>
+<body>
+    <!-- Top bar: Quantum state display -->
+    <header id="state-display" class="state-display">
+        <div class="state-label">Quantum State</div>
+        <div id="state-notation" class="state-notation">|ψ⟩ = |0⟩</div>
+    </header>
+
+    <!-- Main canvas for quantum visualization -->
+    <main id="canvas-container" class="canvas-container">
+        <canvas id="quantum-canvas"></canvas>
+        <!-- Overlay for instructions -->
+        <div id="instructions" class="instructions">
+            <span>Drag qubits to move them</span>
+            <span class="separator">|</span>
+            <span>Bring qubits close to entangle</span>
+        </div>
+    </main>
+
+    <!-- Bottom control bar -->
+    <footer id="controls" class="controls">
+        <div class="control-group">
+            <button id="btn-add-qubit" class="control-btn" title="Add a qubit (max 6)" aria-label="Add qubit">
+                <span class="btn-icon">+</span>
+            </button>
+            <button id="btn-remove-qubit" class="control-btn" title="Remove a qubit (min 1)" aria-label="Remove qubit">
+                <span class="btn-icon">−</span>
+            </button>
+        </div>
+
+        <div class="control-group mode-group">
+            <button id="btn-move" class="control-btn mode-btn active" title="Move Mode - Drag qubits around" aria-label="Move mode">
+                <span class="btn-icon">✋</span>
+                <span class="btn-label">Move</span>
+            </button>
+            <button id="btn-measure" class="control-btn mode-btn" title="Measure Mode - Click qubit to measure" aria-label="Measure mode">
+                <span class="btn-icon">👁</span>
+                <span class="btn-label">Measure</span>
+            </button>
+        </div>
+
+        <div class="control-group">
+            <button id="btn-randomize" class="control-btn accent-btn" title="Generate random quantum state" aria-label="Randomize state">
+                <span class="btn-icon">🎲</span>
+                <span class="btn-label">Random</span>
+            </button>
+        </div>
+    </footer>
+
+    <!-- ES6 Module entry point -->
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>
