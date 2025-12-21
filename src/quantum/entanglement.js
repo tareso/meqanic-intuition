@@ -1,9 +1,10 @@
 /**
  * entanglement.js
- * Calculates entanglement between qubit pairs using concurrence
+ * Calculates entanglement between qubit pairs using Wootters concurrence
  *
- * For pure bipartite states: C = 2√(det(ρ_A)) where ρ_A is single-qubit reduced density matrix
- * For general states: Uses Wootters formula with proper eigenvalue calculation
+ * For pure 2-qubit states: C = 2|αδ - βγ|
+ * For mixed states (from tracing out other qubits): Uses full Wootters formula
+ *   C = max(0, λ1 - λ2 - λ3 - λ4) where λi are sqrt of eigenvalues of R = ρ ρ̃
  */
 
 import {
@@ -14,6 +15,9 @@ import {
     conjugate,
     magnitude
 } from './quantumMath.js';
+
+// Access math.js from global scope for eigenvalue computation
+const math = window.math;
 
 /**
  * Calculate the two-qubit reduced density matrix by tracing out all other qubits
@@ -115,27 +119,143 @@ function calculatePurity2x2(rho) {
 }
 
 /**
- * Calculate concurrence using the linear entropy method
- * For pure bipartite states: C = √(2(1 - Tr(ρ_A²)))
- * This is exact for pure states and a good approximation for near-pure states
+ * σy ⊗ σy matrix used in Wootters concurrence formula
+ * = [[0,0,0,-1], [0,0,1,0], [0,1,0,0], [-1,0,0,0]]
+ */
+const SIGMA_Y_TENSOR_SIGMA_Y = [
+    [0, 0, 0, -1],
+    [0, 0, 1, 0],
+    [0, 1, 0, 0],
+    [-1, 0, 0, 0]
+];
+
+/**
+ * Multiply two 4x4 complex matrices
+ * @param {Array<Array>} A - First matrix
+ * @param {Array<Array>} B - Second matrix
+ * @returns {Array<Array>} Product A × B
+ */
+function matMul4x4(A, B) {
+    const result = [];
+    for (let i = 0; i < 4; i++) {
+        result[i] = [];
+        for (let j = 0; j < 4; j++) {
+            result[i][j] = complex(0, 0);
+            for (let k = 0; k < 4; k++) {
+                result[i][j] = addComplex(
+                    result[i][j],
+                    multiplyComplex(A[i][k], B[k][j])
+                );
+            }
+        }
+    }
+    return result;
+}
+
+/**
+ * Compute the spin-flipped density matrix: ρ̃ = (σy⊗σy) ρ* (σy⊗σy)
+ * @param {Array<Array>} rho - 4x4 density matrix
+ * @returns {Array<Array>} Spin-flipped density matrix
+ */
+function computeSpinFlippedRho(rho) {
+    const sysy = SIGMA_Y_TENSOR_SIGMA_Y;
+
+    // First compute (σy⊗σy) × ρ*
+    const temp = [];
+    for (let i = 0; i < 4; i++) {
+        temp[i] = [];
+        for (let j = 0; j < 4; j++) {
+            temp[i][j] = complex(0, 0);
+            for (let k = 0; k < 4; k++) {
+                // sysy is real, so just multiply by scalar
+                // ρ* is complex conjugate of ρ
+                const rhoStarKJ = conjugate(rho[k][j]);
+                temp[i][j] = addComplex(
+                    temp[i][j],
+                    multiplyComplex(complex(sysy[i][k], 0), rhoStarKJ)
+                );
+            }
+        }
+    }
+
+    // Then multiply by (σy⊗σy) on the right
+    const rhoTilde = [];
+    for (let i = 0; i < 4; i++) {
+        rhoTilde[i] = [];
+        for (let j = 0; j < 4; j++) {
+            rhoTilde[i][j] = complex(0, 0);
+            for (let k = 0; k < 4; k++) {
+                rhoTilde[i][j] = addComplex(
+                    rhoTilde[i][j],
+                    multiplyComplex(temp[i][k], complex(sysy[k][j], 0))
+                );
+            }
+        }
+    }
+
+    return rhoTilde;
+}
+
+/**
+ * Convert our complex matrix format to math.js matrix format
+ * @param {Array<Array>} mat - Our format with {re, im} objects
+ * @returns {math.Matrix} math.js complex matrix
+ */
+function toMathJsMatrix(mat) {
+    const rows = [];
+    for (let i = 0; i < mat.length; i++) {
+        const row = [];
+        for (let j = 0; j < mat[i].length; j++) {
+            row.push(math.complex(mat[i][j].re, mat[i][j].im));
+        }
+        rows.push(row);
+    }
+    return math.matrix(rows);
+}
+
+/**
+ * Calculate Wootters concurrence for a 4x4 two-qubit density matrix
+ * C = max(0, √λ1 - √λ2 - √λ3 - √λ4) where λi are eigenvalues of R = ρ ρ̃
+ * sorted in decreasing order
  *
  * @param {Array<Array>} rhoAB - 4x4 two-qubit density matrix
  * @returns {number} Concurrence value [0, 1]
  */
-function calculateConcurrenceFromLinearEntropy(rhoAB) {
-    // Get single-qubit reduced density matrix
-    const rhoA = getSingleQubitReducedDensityMatrix(rhoAB);
+function calculateWoottersConcurrence(rhoAB) {
+    // Compute spin-flipped density matrix ρ̃
+    const rhoTilde = computeSpinFlippedRho(rhoAB);
 
-    // Calculate purity of ρ_A
-    const purityA = calculatePurity2x2(rhoA);
+    // Compute R = ρ × ρ̃
+    const R = matMul4x4(rhoAB, rhoTilde);
 
-    // Linear entropy: S_L = 1 - Tr(ρ_A²)
-    // For pure bipartite state: C² = 2 * S_L = 2(1 - Tr(ρ_A²))
-    const linearEntropy = 1 - purityA;
+    // Convert to math.js format for eigenvalue computation
+    const RMatrix = toMathJsMatrix(R);
 
-    // Concurrence
-    const concurrenceSquared = 2 * linearEntropy;
-    return Math.sqrt(Math.max(0, Math.min(1, concurrenceSquared)));
+    try {
+        // Compute eigenvalues of R
+        const result = math.eigs(RMatrix);
+        const eigenvalues = result.values.toArray();
+
+        // Extract real parts (eigenvalues of R should be real and non-negative)
+        // Take square root to get λi
+        const sqrtEigenvalues = eigenvalues.map(ev => {
+            // Handle complex eigenvalues (should be real but numerical noise)
+            const realPart = typeof ev === 'object' ? ev.re : ev;
+            return Math.sqrt(Math.max(0, realPart));
+        });
+
+        // Sort in decreasing order
+        sqrtEigenvalues.sort((a, b) => b - a);
+
+        // Wootters formula: C = max(0, λ1 - λ2 - λ3 - λ4)
+        const concurrence = sqrtEigenvalues[0] - sqrtEigenvalues[1] -
+                           sqrtEigenvalues[2] - sqrtEigenvalues[3];
+
+        return Math.max(0, Math.min(1, concurrence));
+    } catch (e) {
+        console.warn('Eigenvalue computation failed, falling back to zero:', e);
+        return 0;
+    }
 }
 
 /**
@@ -191,7 +311,7 @@ export function calculateConcurrence(state, qubitA, qubitB) {
         return calculateConcurrencePure2Qubit(state.amplitudes);
     }
 
-    // For 3+ qubits: get two-qubit reduced density matrix and use linear entropy method
+    // For 3+ qubits: get two-qubit reduced density matrix and use Wootters formula
     const rhoAB = getTwoQubitReducedDensityMatrix(
         state.amplitudes,
         qubitA,
@@ -199,7 +319,7 @@ export function calculateConcurrence(state, qubitA, qubitB) {
         state.numQubits
     );
 
-    return calculateConcurrenceFromLinearEntropy(rhoAB);
+    return calculateWoottersConcurrence(rhoAB);
 }
 
 /**
