@@ -7,6 +7,8 @@
 import { QuantumState } from './quantum/QuantumState.js';
 import { BlochSphere } from './visualization/BlochSphere.js';
 import { EntanglementLines } from './visualization/EntanglementLines.js';
+import { PauliDome } from './visualization/PauliDome.js';
+import { ExpandedStateView } from './ui/ExpandedStateView.js';
 import { GATES, applySingleQubitGate } from './quantum/gates.js';
 import { complex } from './quantum/quantumMath.js';
 import { applyAllExchangeInteractions, findInteractingPairs } from './quantum/spinExchange.js';
@@ -21,6 +23,8 @@ const state = {
     quantumState: null,
     blochSpheres: [],
     entanglementLines: null,
+    pauliDome: null,
+    expandedStateView: null,
     lastTimestamp: 0,
     mode: 'move',  // 'move' or 'measure'
     dragging: {
@@ -71,6 +75,14 @@ function init() {
     // Create entanglement lines renderer
     state.entanglementLines = new EntanglementLines();
 
+    // Create Pauli dome visualization
+    state.pauliDome = new PauliDome();
+    state.pauliDome.updateFromState(state.quantumState);
+
+    // Create expanded state view
+    state.expandedStateView = new ExpandedStateView();
+    state.expandedStateView.updateFromState(state.quantumState);
+
     // Set up event handlers
     setupEventListeners();
     setupControls();
@@ -109,7 +121,9 @@ function updateQubitPositions() {
     const { quantumState, canvas } = state;
     const numQubits = quantumState.numQubits;
     const centerX = canvas.width / 2;
-    const centerY = canvas.height / 2;
+    // Offset center down to avoid overlap with Pauli dome at top
+    const domeOffset = 60;
+    const centerY = canvas.height / 2 + domeOffset;
 
     if (numQubits === 1) {
         quantumState.setQubitPosition(0, centerX, centerY);
@@ -117,7 +131,7 @@ function updateQubitPositions() {
     }
 
     // Arrange in circle
-    const maxRadius = Math.min(canvas.width, canvas.height) / 2 - CONFIG.LAYOUT_PADDING;
+    const maxRadius = Math.min(canvas.width, canvas.height - domeOffset * 2) / 2 - CONFIG.LAYOUT_PADDING;
     const radius = Math.min(maxRadius, 120 + numQubits * 30);
 
     for (let i = 0; i < numQubits; i++) {
@@ -190,6 +204,19 @@ function findQubitAtPosition(x, y) {
 
 function handleMouseDown(e) {
     const pos = getEventPosition(e);
+
+    // Handle expanded view clicks first
+    if (state.expandedStateView.isVisible) {
+        state.expandedStateView.handleClick(pos.x, pos.y);
+        return;
+    }
+
+    // Check if clicking on Pauli dome
+    if (state.pauliDome.containsPoint(pos.x, pos.y)) {
+        state.expandedStateView.show();
+        return;
+    }
+
     const qubitIndex = findQubitAtPosition(pos.x, pos.y);
 
     if (qubitIndex >= 0) {
@@ -202,9 +229,19 @@ function handleMouseDown(e) {
 }
 
 function handleMouseMove(e) {
+    const pos = getEventPosition(e);
+
+    // Handle expanded view mouse move (for tooltips)
+    if (state.expandedStateView.isVisible) {
+        state.expandedStateView.handleMouseMove(pos.x, pos.y);
+        return;
+    }
+
+    // Update Pauli dome hover state
+    state.pauliDome.isHovered = state.pauliDome.containsPoint(pos.x, pos.y);
+
     if (!state.dragging.active) return;
 
-    const pos = getEventPosition(e);
     updateDragging(pos);
 }
 
@@ -316,8 +353,7 @@ function measureQubit(qubitIndex) {
     state.quantumState = new QuantumState(numQubits, newAmplitudes);
     positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
 
-    state.entanglementLines.invalidateCache();
-    updateStateNotation();
+    onStateChanged();
 }
 
 // ============================================
@@ -353,8 +389,7 @@ function addQubit() {
     state.quantumState = new QuantumState(newNumQubits, newAmplitudes);
     updateQubitPositions();
     createBlochSpheres();
-    state.entanglementLines.invalidateCache();
-    updateStateNotation();
+    onStateChanged();
     updateButtonStates();
 }
 
@@ -367,8 +402,7 @@ function removeQubit() {
 
     updateQubitPositions();
     createBlochSpheres();
-    state.entanglementLines.invalidateCache();
-    updateStateNotation();
+    onStateChanged();
     updateButtonStates();
 }
 
@@ -379,8 +413,7 @@ function randomizeState() {
     state.quantumState = QuantumState.createRandomState(numQubits);
     positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
 
-    state.entanglementLines.invalidateCache();
-    updateStateNotation();
+    onStateChanged();
 }
 
 function setMode(mode) {
@@ -407,10 +440,18 @@ function updateButtonStates() {
 }
 
 function updateStateNotation() {
-    const element = document.getElementById('state-notation');
-    if (element) {
-        element.textContent = state.quantumState.toNotationString();
-    }
+    // State notation header removed - no longer needed
+}
+
+/**
+ * Update all state-dependent visualizations
+ * Call this whenever the quantum state changes
+ */
+function onStateChanged() {
+    state.entanglementLines.invalidateCache();
+    state.pauliDome.updateFromState(state.quantumState);
+    state.expandedStateView.updateFromState(state.quantumState);
+    updateStateNotation();
 }
 
 // ============================================
@@ -442,11 +483,8 @@ function update(dt) {
             state.quantumState = result.state;
             state.interactingPairs = result.interactingPairs;
 
-            // Invalidate entanglement cache since state changed
-            state.entanglementLines.invalidateCache();
-
-            // Update state notation display (throttled for performance)
-            updateStateNotation();
+            // Update all state-dependent visualizations
+            onStateChanged();
         } else {
             state.interactingPairs = [];
         }
@@ -454,10 +492,21 @@ function update(dt) {
 }
 
 function render(timestamp) {
-    const { ctx, canvas, quantumState, blochSpheres, entanglementLines, interactingPairs } = state;
+    const { ctx, canvas, quantumState, blochSpheres, entanglementLines, interactingPairs, pauliDome, expandedStateView } = state;
 
     // Clear canvas (transparent for CSS background)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // If expanded view is visible, only draw that
+    if (expandedStateView.isVisible) {
+        expandedStateView.draw(ctx, canvas.width, canvas.height, timestamp);
+        return;
+    }
+
+    // Draw Pauli dome at top of canvas (flat side flush with top)
+    const domeWidth = Math.min(200, canvas.width * 0.3);
+    const domeHeight = domeWidth * 0.5;
+    pauliDome.drawCollapsed(ctx, canvas.width / 2, 0, domeWidth, domeHeight, timestamp);
 
     // Draw interaction zones first (behind everything)
     if (interactingPairs.length > 0) {
@@ -566,16 +615,14 @@ window.meqanic = {
         const positions = state.quantumState.qubitPositions.map(p => ({ ...p }));
         state.quantumState = QuantumState.createZeroState(n);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
     },
     setState1: () => {
         const n = state.quantumState.numQubits;
         const positions = state.quantumState.qubitPositions.map(p => ({ ...p }));
         state.quantumState = QuantumState.createOneState(n);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
     },
     // Create Bell state (|00⟩ + |11⟩)/√2 for testing entanglement
     createBellState: () => {
@@ -599,37 +646,32 @@ window.meqanic = {
 
         state.quantumState = new QuantumState(n, newAmplitudes);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
         console.log('Created Bell state (|00⟩ + |11⟩)/√2 on qubits 0 and 1');
     },
     applyH: (qubit = 0) => {
         const positions = state.quantumState.qubitPositions.map(p => ({ ...p }));
         state.quantumState = applySingleQubitGate(state.quantumState, qubit, GATES.H);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
     },
     applyX: (qubit = 0) => {
         const positions = state.quantumState.qubitPositions.map(p => ({ ...p }));
         state.quantumState = applySingleQubitGate(state.quantumState, qubit, GATES.X);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
     },
     applyY: (qubit = 0) => {
         const positions = state.quantumState.qubitPositions.map(p => ({ ...p }));
         state.quantumState = applySingleQubitGate(state.quantumState, qubit, GATES.Y);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
     },
     applyZ: (qubit = 0) => {
         const positions = state.quantumState.qubitPositions.map(p => ({ ...p }));
         state.quantumState = applySingleQubitGate(state.quantumState, qubit, GATES.Z);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
     },
     // Toggle Heisenberg exchange interaction
     toggleExchange: () => {
@@ -659,8 +701,7 @@ window.meqanic = {
 
         state.quantumState = new QuantumState(n, newAmplitudes);
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
-        state.entanglementLines.invalidateCache();
-        updateStateNotation();
+        onStateChanged();
         console.log('Set to |01⟩ state - drag qubits close to see exchange create entanglement!');
     }
 };

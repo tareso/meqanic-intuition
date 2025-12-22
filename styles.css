@@ -74,63 +74,35 @@ body {
 }
 
 /* ========================================
-   Top Bar - Quantum State Display
+   Meqanic Link
    ======================================== */
 
-.state-display {
-    background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    box-shadow: var(--shadow-md);
-    position: relative;
-    z-index: 10;
-}
-
-.state-label {
-    font-size: 0.75rem;
+.meqanic-link {
+    position: fixed;
+    top: var(--spacing-md);
+    left: var(--spacing-md);
+    z-index: 100;
+    font-family: 'Inter', sans-serif;
+    font-size: 1.1rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     color: var(--accent-primary);
-    white-space: nowrap;
+    text-decoration: none;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    transition: all var(--transition-fast);
 }
 
-.state-notation {
-    font-family: 'JetBrains Mono', 'Courier New', monospace;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-primary);
-    overflow-x: auto;
-    overflow-y: hidden;
-    white-space: nowrap;
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: var(--radius-sm);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    flex: 1;
-    scrollbar-width: thin;
-    scrollbar-color: var(--text-muted) transparent;
-}
-
-.state-notation::-webkit-scrollbar {
-    height: 6px;
-}
-
-.state-notation::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.state-notation::-webkit-scrollbar-thumb {
-    background: var(--text-muted);
-    border-radius: 3px;
-}
-
-.state-notation::-webkit-scrollbar-thumb:hover {
-    background: var(--text-secondary);
+.meqanic-link:hover {
+    background: rgba(0, 0, 0, 0.8);
+    border-color: var(--accent-primary);
+    color: #ffffff;
+    box-shadow: var(--shadow-glow);
+    transform: translateY(-2px);
 }
 
 /* ========================================
