@@ -36,7 +36,14 @@ export const GATES = {
         [complex(1 / Math.sqrt(2), 0), complex(-1 / Math.sqrt(2), 0)]
     ],
 
-    // T gate (π/8 phase gate)
+    // S gate (π/4 phase gate, √Z)
+    // S = [[1, 0], [0, i]]
+    S: [
+        [complex(1, 0), complex(0, 0)],
+        [complex(0, 0), complex(0, 1)]
+    ],
+
+    // T gate (π/8 phase gate, √S)
     // T = [[1, 0], [0, exp(iπ/4)]]
     T: [
         [complex(1, 0), complex(0, 0)],
@@ -173,10 +180,12 @@ export function applyContinuousGate(state, qubitIndex, gateType, dt, rotationSpe
         // For Hadamard, use special continuous rotation
         const t = Math.min(angle / Math.PI, 1.0);  // Normalize to [0, 1]
         gateMatrix = createHadamardRotation(t);
+    } else if (gateType === 'S') {
+        // S gate is a Z rotation by π/2 (√Z)
+        gateMatrix = createRotationGate('Z', angle);
     } else if (gateType === 'T') {
-        // T gate is a Z rotation by π/4
-        const tAngle = Math.min(angle, Math.PI / 4);
-        gateMatrix = createRotationGate('Z', tAngle);
+        // T gate is a Z rotation by π/4 (√S)
+        gateMatrix = createRotationGate('Z', angle);
     } else {
         // X, Y, Z gates use rotation around respective axes
         gateMatrix = createRotationGate(gateType, angle);
@@ -220,6 +229,7 @@ export function getGateInfo(gateType) {
         'Y': { name: 'Y', color: '#2ecc71', axis: 'Y' },      // Green
         'Z': { name: 'Z', color: '#3498db', axis: 'Z' },      // Blue
         'H': { name: 'H', color: '#f39c12', axis: 'XZ' },     // Orange/yellow
+        'S': { name: 'S', color: '#1abc9c', axis: 'Z' },      // Teal
         'T': { name: 'T', color: '#9b59b6', axis: 'Z' }       // Purple
     };
 

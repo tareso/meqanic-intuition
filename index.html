@@ -14,9 +14,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.1/math.js"></script>
 </head>
 <body>
-    <!-- Meqanic logo link -->
-    <a href="https://meqanic.com/" class="meqanic-link" target="_blank" rel="noopener">Meqanic</a>
-
     <!-- Main canvas for quantum visualization -->
     <main id="canvas-container" class="canvas-container">
         <canvas id="quantum-canvas"></canvas>
@@ -47,6 +44,13 @@
             <button id="btn-measure" class="control-btn mode-btn" title="Measure Mode - Click qubit to measure" aria-label="Measure mode">
                 <span class="btn-icon">👁</span>
                 <span class="btn-label">Measure</span>
+            </button>
+        </div>
+
+        <div class="control-group">
+            <button id="btn-operate" class="control-btn operate-btn" title="Toggle gate beam" aria-label="Toggle gate beam">
+                <span class="btn-icon">⚡</span>
+                <span class="btn-label">Operate</span>
             </button>
         </div>
 

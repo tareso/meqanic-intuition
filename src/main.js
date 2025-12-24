@@ -9,7 +9,8 @@ import { BlochSphere } from './visualization/BlochSphere.js';
 import { EntanglementLines } from './visualization/EntanglementLines.js';
 import { PauliDome } from './visualization/PauliDome.js';
 import { ExpandedStateView } from './ui/ExpandedStateView.js';
-import { GATES, applySingleQubitGate } from './quantum/gates.js';
+import { GateBeam } from './visualization/GateBeam.js';
+import { GATES, applySingleQubitGate, applyContinuousGate } from './quantum/gates.js';
 import { complex } from './quantum/quantumMath.js';
 import { applyAllExchangeInteractions, findInteractingPairs } from './quantum/spinExchange.js';
 
@@ -25,6 +26,7 @@ const state = {
     entanglementLines: null,
     pauliDome: null,
     expandedStateView: null,
+    gateBeam: null,
     lastTimestamp: 0,
     mode: 'move',  // 'move' or 'measure'
     dragging: {
@@ -46,7 +48,9 @@ const CONFIG = {
     LAYOUT_PADDING: 100,
     // Heisenberg exchange parameters
     EXCHANGE_THRESHOLD: 150,  // Distance in pixels for exchange interaction
-    EXCHANGE_STRENGTH: 4.0    // Maximum coupling strength J
+    EXCHANGE_STRENGTH: 4.0,   // Maximum coupling strength J
+    // Gate beam parameters
+    GATE_ROTATION_SPEED: Math.PI  // Rotation speed in radians per second
 };
 
 // ============================================
@@ -82,6 +86,9 @@ function init() {
     // Create expanded state view
     state.expandedStateView = new ExpandedStateView();
     state.expandedStateView.updateFromState(state.quantumState);
+
+    // Create gate beam
+    state.gateBeam = new GateBeam();
 
     // Set up event handlers
     setupEventListeners();
@@ -210,6 +217,12 @@ function handleMouseDown(e) {
     // Handle expanded view clicks first
     if (state.expandedStateView.isVisible) {
         state.expandedStateView.handleClick(pos.x, pos.y);
+        return;
+    }
+
+    // Check if clicking on gate selector
+    if (state.gateBeam.isInSelector(pos.x, pos.y)) {
+        state.gateBeam.cycleGate();
         return;
     }
 
@@ -368,6 +381,15 @@ function setupControls() {
     document.getElementById('btn-randomize')?.addEventListener('click', randomizeState);
     document.getElementById('btn-move')?.addEventListener('click', () => setMode('move'));
     document.getElementById('btn-measure')?.addEventListener('click', () => setMode('measure'));
+    document.getElementById('btn-operate')?.addEventListener('click', toggleGateBeam);
+}
+
+function toggleGateBeam() {
+    state.gateBeam.toggle();
+    const btn = document.getElementById('btn-operate');
+    if (btn) {
+        btn.classList.toggle('active', state.gateBeam.isActive);
+    }
 }
 
 function addQubit() {
@@ -471,6 +493,34 @@ function animate(timestamp) {
 }
 
 function update(dt) {
+    let stateChanged = false;
+
+    // Apply gate beam rotations when qubits overlap with beam
+    if (state.gateBeam.isActive) {
+        const gateType = state.gateBeam.getCurrentGate();
+        const positions = state.quantumState.qubitPositions;
+
+        for (let i = 0; i < state.quantumState.numQubits; i++) {
+            const pos = positions[i];
+            const overlap = state.gateBeam.getQubitOverlap(pos.x, pos.y, CONFIG.QUBIT_RADIUS);
+
+            if (overlap > 0) {
+                // Apply rotation scaled by overlap amount
+                const effectiveDt = dt * overlap;
+                const oldPositions = state.quantumState.qubitPositions.map(p => ({ x: p.x, y: p.y }));
+                state.quantumState = applyContinuousGate(
+                    state.quantumState,
+                    i,
+                    gateType,
+                    effectiveDt,
+                    CONFIG.GATE_ROTATION_SPEED
+                );
+                oldPositions.forEach((p, idx) => state.quantumState.setQubitPosition(idx, p.x, p.y));
+                stateChanged = true;
+            }
+        }
+    }
+
     // Apply Heisenberg exchange interaction when qubits are close
     if (state.exchangeEnabled && state.quantumState.numQubits >= 2) {
         // Find interacting pairs and apply exchange
@@ -484,17 +534,20 @@ function update(dt) {
         if (result.interactingPairs.length > 0) {
             state.quantumState = result.state;
             state.interactingPairs = result.interactingPairs;
-
-            // Update all state-dependent visualizations
-            onStateChanged();
+            stateChanged = true;
         } else {
             state.interactingPairs = [];
         }
     }
+
+    // Update visualizations if state changed
+    if (stateChanged) {
+        onStateChanged();
+    }
 }
 
 function render(timestamp) {
-    const { ctx, canvas, quantumState, blochSpheres, entanglementLines, interactingPairs, pauliDome, expandedStateView } = state;
+    const { ctx, canvas, quantumState, blochSpheres, entanglementLines, interactingPairs, pauliDome, expandedStateView, gateBeam } = state;
 
     // Clear canvas (transparent for CSS background)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -506,13 +559,16 @@ function render(timestamp) {
     }
 
     // Draw Pauli dome at top of canvas (flat side flush with top)
-    // Smaller dome on mobile to avoid overlap with Meqanic link
+    // Smaller dome on mobile to avoid overlap
     const isMobile = canvas.width < 500;
     const domeWidth = isMobile
         ? Math.min(120, canvas.width * 0.35)
         : Math.min(200, canvas.width * 0.3);
     const domeHeight = domeWidth * 0.5;
     pauliDome.drawCollapsed(ctx, canvas.width / 2, 0, domeWidth, domeHeight, timestamp);
+
+    // Draw gate beam (behind qubits)
+    gateBeam.draw(ctx, canvas.width, canvas.height, timestamp, isMobile);
 
     // Draw interaction zones first (behind everything)
     if (interactingPairs.length > 0) {
