@@ -122,7 +122,9 @@ function updateQubitPositions() {
     const numQubits = quantumState.numQubits;
     const centerX = canvas.width / 2;
     // Offset center down to avoid overlap with Pauli dome at top
-    const domeOffset = 60;
+    // Smaller offset on mobile since dome is smaller
+    const isMobile = canvas.width < 500;
+    const domeOffset = isMobile ? 40 : 60;
     const centerY = canvas.height / 2 + domeOffset;
 
     if (numQubits === 1) {
@@ -504,7 +506,11 @@ function render(timestamp) {
     }
 
     // Draw Pauli dome at top of canvas (flat side flush with top)
-    const domeWidth = Math.min(200, canvas.width * 0.3);
+    // Smaller dome on mobile to avoid overlap with Meqanic link
+    const isMobile = canvas.width < 500;
+    const domeWidth = isMobile
+        ? Math.min(120, canvas.width * 0.35)
+        : Math.min(200, canvas.width * 0.3);
     const domeHeight = domeWidth * 0.5;
     pauliDome.drawCollapsed(ctx, canvas.width / 2, 0, domeWidth, domeHeight, timestamp);
 
