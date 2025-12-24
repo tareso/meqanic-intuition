@@ -93,6 +93,25 @@ body {
 }
 
 /* ========================================
+   Decohere Button (Decoherence Beam Toggle)
+   ======================================== */
+
+.decohere-btn {
+    background: linear-gradient(135deg, #cc4444 0%, #aa2222 100%);
+    border: none;
+}
+
+.decohere-btn:hover:not(:disabled) {
+    background: linear-gradient(135deg, #dd5555 0%, #cc4444 100%);
+    box-shadow: var(--shadow-md), 0 0 20px rgba(200, 60, 60, 0.4);
+}
+
+.decohere-btn.active {
+    background: linear-gradient(135deg, #ff6666 0%, #cc4444 100%);
+    box-shadow: 0 0 15px rgba(255, 100, 100, 0.6);
+}
+
+/* ========================================
    Main Canvas Container
    ======================================== */
 

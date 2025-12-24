@@ -10,7 +10,9 @@ import { EntanglementLines } from './visualization/EntanglementLines.js';
 import { PauliDome } from './visualization/PauliDome.js';
 import { ExpandedStateView } from './ui/ExpandedStateView.js';
 import { GateBeam } from './visualization/GateBeam.js';
+import { DecoherenceBeam } from './visualization/DecoherenceBeam.js';
 import { GATES, applySingleQubitGate, applyContinuousGate } from './quantum/gates.js';
+import { applyDecoherence } from './quantum/decoherence.js';
 import { complex } from './quantum/quantumMath.js';
 import { applyAllExchangeInteractions, findInteractingPairs } from './quantum/spinExchange.js';
 
@@ -27,6 +29,7 @@ const state = {
     pauliDome: null,
     expandedStateView: null,
     gateBeam: null,
+    decoherenceBeam: null,
     lastTimestamp: 0,
     mode: 'move',  // 'move' or 'measure'
     dragging: {
@@ -50,7 +53,9 @@ const CONFIG = {
     EXCHANGE_THRESHOLD: 150,  // Distance in pixels for exchange interaction
     EXCHANGE_STRENGTH: 4.0,   // Maximum coupling strength J
     // Gate beam parameters
-    GATE_ROTATION_SPEED: Math.PI  // Rotation speed in radians per second
+    GATE_ROTATION_SPEED: Math.PI,  // Rotation speed in radians per second
+    // Decoherence beam parameters
+    DECOHERENCE_STRENGTH: 3.0  // Decoherence rate multiplier
 };
 
 // ============================================
@@ -89,6 +94,9 @@ function init() {
 
     // Create gate beam
     state.gateBeam = new GateBeam();
+
+    // Create decoherence beam
+    state.decoherenceBeam = new DecoherenceBeam();
 
     // Set up event handlers
     setupEventListeners();
@@ -223,6 +231,12 @@ function handleMouseDown(e) {
     // Check if clicking on gate selector
     if (state.gateBeam.isInSelector(pos.x, pos.y)) {
         state.gateBeam.cycleGate();
+        return;
+    }
+
+    // Check if clicking on decoherence selector
+    if (state.decoherenceBeam.isInSelector(pos.x, pos.y)) {
+        state.decoherenceBeam.cycleMode();
         return;
     }
 
@@ -382,6 +396,7 @@ function setupControls() {
     document.getElementById('btn-move')?.addEventListener('click', () => setMode('move'));
     document.getElementById('btn-measure')?.addEventListener('click', () => setMode('measure'));
     document.getElementById('btn-operate')?.addEventListener('click', toggleGateBeam);
+    document.getElementById('btn-decohere')?.addEventListener('click', toggleDecoherenceBeam);
 }
 
 function toggleGateBeam() {
@@ -389,6 +404,14 @@ function toggleGateBeam() {
     const btn = document.getElementById('btn-operate');
     if (btn) {
         btn.classList.toggle('active', state.gateBeam.isActive);
+    }
+}
+
+function toggleDecoherenceBeam() {
+    state.decoherenceBeam.toggle();
+    const btn = document.getElementById('btn-decohere');
+    if (btn) {
+        btn.classList.toggle('active', state.decoherenceBeam.isActive);
     }
 }
 
@@ -521,6 +544,32 @@ function update(dt) {
         }
     }
 
+    // Apply decoherence beam effects when qubits overlap with beam
+    if (state.decoherenceBeam.isActive) {
+        const decoherenceMode = state.decoherenceBeam.getCurrentMode();
+        const positions = state.quantumState.qubitPositions;
+
+        for (let i = 0; i < state.quantumState.numQubits; i++) {
+            const pos = positions[i];
+            const overlap = state.decoherenceBeam.getQubitOverlap(pos.x, pos.y, CONFIG.QUBIT_RADIUS);
+
+            if (overlap > 0) {
+                // Apply decoherence scaled by overlap amount
+                const effectiveDt = dt * overlap;
+                const oldPositions = state.quantumState.qubitPositions.map(p => ({ x: p.x, y: p.y }));
+                state.quantumState = applyDecoherence(
+                    state.quantumState,
+                    i,
+                    decoherenceMode,
+                    effectiveDt,
+                    CONFIG.DECOHERENCE_STRENGTH
+                );
+                oldPositions.forEach((p, idx) => state.quantumState.setQubitPosition(idx, p.x, p.y));
+                stateChanged = true;
+            }
+        }
+    }
+
     // Apply Heisenberg exchange interaction when qubits are close
     if (state.exchangeEnabled && state.quantumState.numQubits >= 2) {
         // Find interacting pairs and apply exchange
@@ -547,7 +596,7 @@ function update(dt) {
 }
 
 function render(timestamp) {
-    const { ctx, canvas, quantumState, blochSpheres, entanglementLines, interactingPairs, pauliDome, expandedStateView, gateBeam } = state;
+    const { ctx, canvas, quantumState, blochSpheres, entanglementLines, interactingPairs, pauliDome, expandedStateView, gateBeam, decoherenceBeam } = state;
 
     // Clear canvas (transparent for CSS background)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -569,6 +618,9 @@ function render(timestamp) {
 
     // Draw gate beam (behind qubits)
     gateBeam.draw(ctx, canvas.width, canvas.height, timestamp, isMobile);
+
+    // Draw decoherence beam (behind qubits)
+    decoherenceBeam.draw(ctx, canvas.width, canvas.height, timestamp, isMobile);
 
     // Draw interaction zones first (behind everything)
     if (interactingPairs.length > 0) {

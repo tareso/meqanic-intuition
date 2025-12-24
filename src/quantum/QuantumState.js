@@ -45,6 +45,10 @@ export class QuantumState {
             this.qubitPositions.push({ x: 0, y: 0 });
         }
 
+        // T2 dephasing factors for each qubit (1.0 = no dephasing, 0.0 = fully dephased)
+        // These track coherence decay independently of the pure state amplitudes
+        this.dephasingFactors = new Array(numQubits).fill(1.0);
+
         // Cache for expensive calculations
         this._densityMatrixCache = null;
         this._reducedDensityMatrixCache = new Map();
@@ -94,23 +98,84 @@ export class QuantumState {
 
     /**
      * Get Bloch vector for a specific qubit
+     * Applies T2 dephasing factors to x and y components
      * @param {number} qubitIndex - Index of the qubit (0-indexed)
      * @returns {{x: number, y: number, z: number}} Bloch vector
      */
     getBlochVector(qubitIndex) {
         const rho = this.getReducedDensityMatrix(qubitIndex);
-        return blochVectorFromDensityMatrix(rho);
+        const bloch = blochVectorFromDensityMatrix(rho);
+
+        // Apply T2 dephasing factor to x and y (coherences decay, populations unchanged)
+        const dephasingFactor = this.dephasingFactors[qubitIndex];
+        return {
+            x: bloch.x * dephasingFactor,
+            y: bloch.y * dephasingFactor,
+            z: bloch.z  // z (population difference) unchanged by T2
+        };
     }
 
     /**
      * Get purity of a specific qubit
      * Purity = 1 for pure states, < 1 for mixed/entangled states
+     * Accounts for T2 dephasing effects
      * @param {number} qubitIndex - Index of the qubit (0-indexed)
      * @returns {number} Purity value [0.5, 1]
      */
     getPurity(qubitIndex) {
-        const rho = this.getReducedDensityMatrix(qubitIndex);
-        return purity(rho);
+        // Get the effective Bloch vector (with dephasing applied)
+        const bloch = this.getBlochVector(qubitIndex);
+
+        // Purity from Bloch vector: Tr(ρ²) = (1 + |r|²) / 2
+        const rSquared = bloch.x * bloch.x + bloch.y * bloch.y + bloch.z * bloch.z;
+        return (1 + rSquared) / 2;
+    }
+
+    /**
+     * Apply T2 dephasing to a specific qubit
+     * Reduces the dephasing factor exponentially
+     * @param {number} qubitIndex - Index of the qubit
+     * @param {number} decayAmount - Decay factor to multiply (e.g., exp(-dt/T2))
+     */
+    applyT2Dephasing(qubitIndex, decayAmount) {
+        if (qubitIndex < 0 || qubitIndex >= this.numQubits) {
+            throw new Error(`Invalid qubit index ${qubitIndex}`);
+        }
+        this.dephasingFactors[qubitIndex] *= decayAmount;
+        // Clamp to prevent numerical issues
+        if (this.dephasingFactors[qubitIndex] < 1e-10) {
+            this.dephasingFactors[qubitIndex] = 0;
+        }
+    }
+
+    /**
+     * Reset T2 dephasing for a specific qubit (e.g., after measurement)
+     * @param {number} qubitIndex - Index of the qubit
+     */
+    resetDephasing(qubitIndex) {
+        if (qubitIndex < 0 || qubitIndex >= this.numQubits) {
+            throw new Error(`Invalid qubit index ${qubitIndex}`);
+        }
+        this.dephasingFactors[qubitIndex] = 1.0;
+    }
+
+    /**
+     * Reset all dephasing factors
+     */
+    resetAllDephasing() {
+        this.dephasingFactors.fill(1.0);
+    }
+
+    /**
+     * Get the dephasing factor for a qubit
+     * @param {number} qubitIndex - Index of the qubit
+     * @returns {number} Dephasing factor [0, 1]
+     */
+    getDephasingFactor(qubitIndex) {
+        if (qubitIndex < 0 || qubitIndex >= this.numQubits) {
+            throw new Error(`Invalid qubit index ${qubitIndex}`);
+        }
+        return this.dephasingFactors[qubitIndex];
     }
 
     /**
@@ -187,6 +252,7 @@ export class QuantumState {
         const clonedAmplitudes = this.amplitudes.map(amp => complex(amp.re, amp.im));
         const newState = new QuantumState(this.numQubits, clonedAmplitudes);
         newState.qubitPositions = this.qubitPositions.map(pos => ({ x: pos.x, y: pos.y }));
+        newState.dephasingFactors = [...this.dephasingFactors];
         return newState;
     }
 
