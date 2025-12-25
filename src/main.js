@@ -409,6 +409,11 @@ function setupControls() {
     document.getElementById('btn-measure')?.addEventListener('click', () => setMode('measure'));
     document.getElementById('btn-operate')?.addEventListener('click', toggleGateBeam);
     document.getElementById('btn-decohere')?.addEventListener('click', toggleDecoherenceBeam);
+    document.getElementById('btn-about')?.addEventListener('click', openAbout);
+}
+
+function openAbout() {
+    window.open('README.md', '_blank');
 }
 
 function toggleGateBeam() {
