@@ -187,11 +187,19 @@ function setupEventListeners() {
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mouseup', handleMouseUp);
     canvas.addEventListener('mouseleave', handleMouseUp);
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
 
     // Touch events for mobile
     canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
     canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
     canvas.addEventListener('touchend', handleTouchEnd);
+}
+
+function handleWheel(e) {
+    const pos = getEventPosition(e);
+    if (state.expandedStateView.handleWheel(pos.x, pos.y, e.deltaY)) {
+        e.preventDefault();
+    }
 }
 
 function getEventPosition(e) {
@@ -222,10 +230,13 @@ function findQubitAtPosition(x, y) {
 function handleMouseDown(e) {
     const pos = getEventPosition(e);
 
-    // Handle expanded view clicks first
+    // Handle expanded view interactions first (dragging, clicks inside window)
     if (state.expandedStateView.isVisible) {
-        state.expandedStateView.handleClick(pos.x, pos.y);
-        return;
+        // Check if mouse down is inside the window (for dragging or clicking)
+        if (state.expandedStateView.handleMouseDown(pos.x, pos.y)) {
+            return; // Event consumed by expanded view
+        }
+        // Click was outside window - fall through to allow qubit interaction
     }
 
     // Check if clicking on gate selector
@@ -254,7 +265,7 @@ function handleMouseDown(e) {
 
     // Check if clicking on Pauli dome
     if (state.pauliDome.containsPoint(pos.x, pos.y)) {
-        state.expandedStateView.show();
+        state.expandedStateView.show(state.canvas.width, state.canvas.height);
         return;
     }
 
@@ -272,10 +283,13 @@ function handleMouseDown(e) {
 function handleMouseMove(e) {
     const pos = getEventPosition(e);
 
-    // Handle expanded view mouse move (for tooltips)
+    // Handle expanded view mouse move (dragging and tooltips)
     if (state.expandedStateView.isVisible) {
-        state.expandedStateView.handleMouseMove(pos.x, pos.y);
-        return;
+        // Check if window is being dragged
+        if (state.expandedStateView.handleMouseMove(pos.x, pos.y, state.canvas.width, state.canvas.height)) {
+            return; // Window is being dragged
+        }
+        // Not dragging window - continue to allow qubit dragging
     }
 
     // Update Pauli dome hover state
@@ -286,7 +300,18 @@ function handleMouseMove(e) {
     updateDragging(pos);
 }
 
-function handleMouseUp() {
+function handleMouseUp(e) {
+    // Handle expanded view mouse up (stop window dragging and handle clicks)
+    if (state.expandedStateView.isVisible) {
+        const wasDragging = state.expandedStateView.isDragging;
+        state.expandedStateView.handleMouseUp();
+
+        // If we weren't dragging, handle as a click for buttons
+        if (!wasDragging && e) {
+            const pos = getEventPosition(e);
+            state.expandedStateView.handleClick(pos.x, pos.y);
+        }
+    }
     stopDragging();
 }
 
@@ -300,8 +325,17 @@ function handleTouchMove(e) {
     handleMouseMove(e);
 }
 
-function handleTouchEnd() {
-    stopDragging();
+function handleTouchEnd(e) {
+    // Handle click on expanded view (close button, toggle button)
+    if (state.expandedStateView.isVisible && e.changedTouches && e.changedTouches.length > 0) {
+        const rect = state.canvas.getBoundingClientRect();
+        const pos = {
+            x: e.changedTouches[0].clientX - rect.left,
+            y: e.changedTouches[0].clientY - rect.top
+        };
+        state.expandedStateView.handleClick(pos.x, pos.y);
+    }
+    handleMouseUp();
 }
 
 function startDragging(qubitIndex, pos) {
@@ -618,12 +652,6 @@ function render(timestamp) {
     // Clear canvas (transparent for CSS background)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // If expanded view is visible, only draw that
-    if (expandedStateView.isVisible) {
-        expandedStateView.draw(ctx, canvas.width, canvas.height, timestamp);
-        return;
-    }
-
     // Draw Pauli dome at top of canvas (flat side flush with top)
     // Smaller dome on mobile to avoid overlap
     const isMobile = canvas.width < 500;
@@ -654,6 +682,11 @@ function render(timestamp) {
         const blochVector = quantumState.getBlochVector(i);
         const purity = quantumState.getPurity(i);
         blochSpheres[i].draw(ctx, blochVector, purity, i, timestamp);
+    }
+
+    // Draw expanded state view on top (floating window)
+    if (expandedStateView.isVisible) {
+        expandedStateView.draw(ctx, canvas.width, canvas.height, timestamp);
     }
 }
 

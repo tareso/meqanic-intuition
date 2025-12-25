@@ -55,7 +55,7 @@ python3 -m http.server 8080
 | **Random** | Generate random state |
 | **Gate selector** | Click to activate/cycle gates (X→Y→Z→H→S→T) |
 | **Decoherence selector** | Click to activate/cycle modes (T2→T1→T1+T2) |
-| **Pauli dome** | Click for expanded density matrix view |
+| **Pauli dome** | Click to open floating state inspector |
 
 ## Physics
 
@@ -254,20 +254,50 @@ Measurement is probabilistic and causes **state collapse**.
 
 The T2 dephasing factor resets to 1.0 for the measured qubit.
 
-### Pauli Basis Visualization
+### State Inspector (Floating Window)
 
-The **Pauli Dome** at top-center displays the full density matrix expanded in the Pauli basis:
+Click the **Pauli Dome** at top-center to open a draggable floating window with three visualization modes:
+
+#### Pauli Matrix View
+
+Displays the density matrix expanded in the Pauli basis:
 
 ```
 ρ = (1/2^N) Σᵢ cᵢ Pᵢ
 ```
 
-where Pᵢ are tensor products of {I, X, Y, Z}.
-
 - **Grid size**: 2×2 (1 qubit), 4×4 (2 qubits), 8×8 (3 qubits), etc.
-- **Colors**: Red = positive coefficient, Blue = negative
-- **Intensity**: Magnitude of coefficient
-- **Click**: Expands to full-screen view with hover tooltips
+- **Colors**: Red = positive, Blue = negative, intensity = magnitude
+- **Hover**: Shows exact coefficient values
+
+#### State Vector View
+
+Shows all 2^N basis state amplitudes sorted by probability:
+
+- **Bars**: Length = relative magnitude, color = phase
+- **Scrollable**: Mouse wheel or drag scrollbar for large systems (e.g., 64 states for 6 qubits)
+- **Details**: Probability percentage and complex amplitude for each basis state
+
+#### Correlation Matrix View
+
+Displays pairwise quantum correlations between all qubits:
+
+```
+Correlation(i,j) = ⟨ZᵢZⱼ⟩ - ⟨Zᵢ⟩⟨Zⱼ⟩
+```
+
+- **Off-diagonal cells**: ZZ correlations
+  - **Red** = Positively correlated (qubits tend to same state)
+  - **Blue** = Anti-correlated (qubits tend to opposite states)
+  - **White** = Uncorrelated
+- **Diagonal cells (gold)**: Single-qubit purity
+
+This reveals entanglement structure: Bell states show strong correlations (±1), while product states show zero correlation.
+
+**Window features:**
+- Drag title bar to reposition
+- Semi-transparent background lets you see qubits underneath
+- Manipulate qubits while window is open to see real-time updates
 
 ## Technical Stack
 
@@ -287,12 +317,14 @@ src/
 │   ├── spinExchange.js     # Heisenberg exchange interaction
 │   ├── decoherence.js      # T1/T2 Kraus operators
 │   └── pauliBasis.js       # Pauli basis expansion
-└── visualization/
-    ├── BlochSphere.js      # 3D Bloch sphere with perspective
-    ├── EntanglementLines.js # Oscillating entanglement arcs
-    ├── PauliDome.js        # Density matrix grid visualization
-    ├── GateBeam.js         # Yellow beam with shimmer effect
-    └── DecoherenceBeam.js  # Red beam with shimmer effect
+├── visualization/
+│   ├── BlochSphere.js      # 3D Bloch sphere with perspective
+│   ├── EntanglementLines.js # Oscillating entanglement arcs
+│   ├── PauliDome.js        # Density matrix grid visualization
+│   ├── GateBeam.js         # Yellow beam with shimmer effect
+│   └── DecoherenceBeam.js  # Red beam with shimmer effect
+└── ui/
+    └── ExpandedStateView.js # Floating state inspector window
 ```
 
 ## Inspiration
