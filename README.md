@@ -309,6 +309,8 @@ The broader vision of making quantum mechanics tangible draws from:
 > Charles Tahan, National Quantum Coordination Office, OSTP
 > [quantum.gov](https://www.quantum.gov/a-quantum-wish/) (February 2022)
 
+MEQANIC Intuition is part of the MEQANIC project: [meqanic.com](https://meqanic.com)
+
 ## License
 
 MIT
