@@ -230,13 +230,25 @@ function handleMouseDown(e) {
 
     // Check if clicking on gate selector
     if (state.gateBeam.isInSelector(pos.x, pos.y)) {
-        state.gateBeam.cycleGate();
+        if (!state.gateBeam.isActive) {
+            // Turn on beam if it's off
+            toggleGateBeam();
+        } else {
+            // Cycle gate if beam is already on
+            state.gateBeam.cycleGate();
+        }
         return;
     }
 
     // Check if clicking on decoherence selector
     if (state.decoherenceBeam.isInSelector(pos.x, pos.y)) {
-        state.decoherenceBeam.cycleMode();
+        if (!state.decoherenceBeam.isActive) {
+            // Turn on beam if it's off
+            toggleDecoherenceBeam();
+        } else {
+            // Cycle mode if beam is already on
+            state.decoherenceBeam.cycleMode();
+        }
         return;
     }
 

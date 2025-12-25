@@ -1,12 +1,15 @@
-# MEQANIC - Interactive Quantum State Visualizer
+# MEQANIC Intuition - Interactive Quantum State Visualizer
 
-MEQANIC is an interactive web-based quantum computing visualization tool that provides intuitive, physics-accurate representations of quantum states using Bloch spheres and entanglement visualizations.
+**"What it's like to be a qubit"**
+
+MEQANIC is an interactive web-based quantum computing visualization tool that provides intuitive, physics-accurate representations of quantum states using Bloch spheres and entanglement visualizations. Experience quantum mechanics hands-on by manipulating qubits, applying gates, creating entanglement, and observing decoherence.
 
 ![Two Qubit Bell State](docs/two-qubit-bell.png)
 
 ## Table of Contents
 
 - [Philosophy](#philosophy)
+- [Interface Overview](#interface-overview)
 - [Single Qubit Physics](#single-qubit-physics)
   - [The Bloch Sphere](#the-bloch-sphere)
   - [State Vector Representation](#state-vector-representation)
@@ -20,8 +23,14 @@ MEQANIC is an interactive web-based quantum computing visualization tool that pr
   - [Measuring Entanglement: Concurrence](#measuring-entanglement-concurrence)
   - [Visualization of Entanglement](#visualization-of-entanglement)
 - [Heisenberg Exchange Interaction](#heisenberg-exchange-interaction)
+- [Quantum Gates (Operate Beam)](#quantum-gates-operate-beam)
+- [Decoherence (Decohere Beam)](#decoherence-decohere-beam)
 - [Measurement](#measurement)
+- [Pauli Basis Visualization](#pauli-basis-visualization)
 - [Getting Started](#getting-started)
+- [Controls Reference](#controls-reference)
+- [Technical Stack](#technical-stack)
+- [Acknowledgments](#acknowledgments)
 
 ---
 
@@ -36,6 +45,53 @@ MEQANIC is built on a core principle: **physics accuracy first, visualization se
 3. **Purity = Knowledge**: The size of the inner golden sphere represents how much we "know" about that qubit in isolation. Pure states fill the sphere; entangled qubits appear mixed.
 
 4. **Entanglement as Correlation**: The colorful oscillating arcs between qubits represent quantum correlations that cannot be explained classically—the defining feature of entanglement.
+
+5. **Interactive Learning**: Drag qubits to create entanglement, apply gates to rotate states, and observe decoherence—all in real time with immediate visual feedback.
+
+---
+
+## Interface Overview
+
+The MEQANIC interface consists of several key elements:
+
+### Screen Layout
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  [X]                    Pauli Basis                        [T2] │
+│  Gate                   (Density Matrix)              Decohere  │
+│  Selector               Visualization                  Selector │
+│   │                                                         │   │
+│   │ Yellow                                            Red   │   │
+│   │ Beam                                              Beam  │   │
+│   │ (when                                            (when  │   │
+│   │ active)                                         active) │   │
+│   ▼                                                       ▼     │
+│                                                                 │
+│                     ┌───────────────┐                           │
+│                     │   |0⟩         │                           │
+│                     │    ↑          │                           │
+│                     │   ◉──→       │  ← Bloch Sphere            │
+│                     │   |1⟩         │                           │
+│                     │    q0         │                           │
+│                     └───────────────┘                           │
+│                                                                 │
+│            "Drag qubits to move them | Bring qubits close..."   │
+├─────────────────────────────────────────────────────────────────┤
+│  [+] [-]   [Move] [Measure]   [Operate] [Decohere]   [Random]   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### UI Elements
+
+| Element | Location | Description |
+|---------|----------|-------------|
+| **Gate Selector** | Top-left | Metal box showing current gate (X, Y, Z, S, T). Click to activate beam or cycle gates. |
+| **Decoherence Selector** | Top-right | Metal box showing current mode (T2, T1, T1+T2). Click to activate beam or cycle modes. |
+| **Pauli Basis Dome** | Top-center | Density matrix visualization. Click to expand for detailed view. |
+| **Bloch Spheres** | Center | One per qubit showing quantum state. Drag to move. |
+| **Entanglement Lines** | Between qubits | Purple shimmering lines showing quantum correlations. |
+| **Control Bar** | Bottom | Buttons for all interactions. |
 
 ---
 
@@ -85,6 +141,7 @@ The quantum state is stored as an array of 2^N complex amplitudes:
 | **Red arrow** | The Bloch vector (x, y, z) extracted from the reduced density matrix |
 | **Golden inner sphere** | Purity Tr(ρ²) — size indicates how "pure" the single-qubit state is |
 | **|0⟩ / |1⟩ labels** | Computational basis states at the poles |
+| **qN label** | Qubit index identifier |
 
 #### Extracting the Bloch Vector
 
@@ -269,6 +326,130 @@ This creates a smooth transition from strong coupling when close to no coupling 
 
 ---
 
+## Quantum Gates (Operate Beam)
+
+The **Operate Beam** allows you to apply single-qubit quantum gates continuously to qubits.
+
+### How It Works
+
+1. Click the **Operate** button or click on the gate selector (top-left metal box) to activate the yellow beam
+2. The beam descends from the gate selector with shimmering yellow lines
+3. Drag a qubit into the beam to apply the selected gate continuously
+4. Click the gate selector to cycle through available gates (when beam is active)
+
+### Available Gates
+
+| Gate | Axis | Description | Matrix |
+|------|------|-------------|--------|
+| **X** | X-axis | Pauli-X (bit flip) | Rotates around X-axis |
+| **Y** | Y-axis | Pauli-Y | Rotates around Y-axis |
+| **Z** | Z-axis | Pauli-Z (phase flip) | Rotates around Z-axis |
+| **S** | Z-axis | S gate (√Z) | π/2 rotation around Z |
+| **T** | Z-axis | T gate (√S) | π/4 rotation around Z |
+
+### Gate Application
+
+Gates are applied continuously while a qubit overlaps with the beam:
+- Rotation speed: π radians per second
+- Partial overlap results in proportionally slower rotation
+- The gate selector shows which gate is currently selected
+- Active beam shows yellow glow at the bottom of the selector
+
+### Visual Indicators
+
+- **Inactive**: Gate label (X, Y, Z, S, T) in dark gray
+- **Active**: Gate label in yellow, glowing bottom edge, yellow beam with descending lines
+
+---
+
+## Decoherence (Decohere Beam)
+
+The **Decohere Beam** simulates quantum decoherence—the process by which quantum systems lose their quantum properties due to interaction with the environment.
+
+### How It Works
+
+1. Click the **Decohere** button or click on the decoherence selector (top-right metal box) to activate the red beam
+2. The beam descends from the selector with shimmering red lines
+3. Drag a qubit into the beam to apply decoherence
+4. Click the selector to cycle through decoherence modes (when beam is active)
+
+### Decoherence Modes
+
+| Mode | Description | Effect on Bloch Vector |
+|------|-------------|------------------------|
+| **T2** | Dephasing (pure dephasing) | x, y components decay exponentially; z unchanged |
+| **T1** | Relaxation (amplitude damping) | State decays toward \|0⟩ ground state |
+| **T1+T2** | Combined | Both dephasing and relaxation occur |
+
+### Physics of Decoherence
+
+#### T2 Dephasing (Transverse Relaxation)
+
+T2 dephasing causes loss of phase coherence without energy loss:
+
+```
+ρ(t) = [ ρ₀₀        ρ₀₁·e^(-t/T2) ]
+       [ ρ₁₀·e^(-t/T2)    ρ₁₁     ]
+```
+
+- **Physical interpretation**: The qubit's phase becomes randomized
+- **Bloch sphere effect**: x and y shrink while z stays constant
+- **Purity decreases**: The inner golden sphere shrinks
+
+#### T1 Relaxation (Longitudinal Relaxation)
+
+T1 relaxation causes the qubit to decay toward the ground state |0⟩:
+
+```
+Kraus operators:
+K₀ = |0⟩⟨0| + √(1-γ)|1⟩⟨1|   (no decay)
+K₁ = √γ |0⟩⟨1|                (decay occurred)
+```
+
+where γ = 1 - e^(-t/T1)
+
+- **Physical interpretation**: Energy dissipation to the environment
+- **Bloch sphere effect**: State vector drifts toward north pole (|0⟩)
+- **In real systems**: T2 ≤ 2·T1 (dephasing is always at least as fast as relaxation)
+
+### Effects on Entanglement
+
+Decoherence has important effects on entangled qubits:
+
+- **T2 on entangled qubits**: For highly entangled qubits (already near maximally mixed), the effect is subtle since x,y components are already small
+- **T1 breaks entanglement**: Amplitude damping is a non-unitary operation that destroys quantum correlations
+- **Purity changes**: After decoherence, individual qubits may become *more* pure as entanglement is destroyed
+
+### Implementation Notes
+
+MEQANIC uses simplified models suitable for educational visualization:
+
+**T2 Implementation:**
+- Uses per-qubit "dephasing factors" that multiply x,y Bloch components
+- Factors decay as e^(-t/T2) providing correct exponential decay
+- This approach correctly preserves z while decaying x,y
+
+**T1 Implementation:**
+- Applies amplitude damping Kraus operators to the state vector
+- **Limitation**: The implementation applies Kraus operators coherently as (K₀ + K₁)|ψ⟩ rather than as a true classical mixture ρ' = K₀ρK₀† + K₁ρK₁†
+- This creates small spurious x-coherences in the Bloch vector
+- **Qualitative behavior is correct**: decay toward |0⟩, entanglement breaking, purity changes
+- For a fully accurate simulation, a density matrix formalism would be required
+
+**For Educational Purposes:**
+The visualizations correctly demonstrate:
+- T2 causes phase randomization (x,y decay)
+- T1 causes energy relaxation (drift to |0⟩)
+- Decoherence destroys entanglement
+- Mixed states have shorter Bloch vectors
+
+### Visual Indicators
+
+- **Inactive**: Mode label (T2, T1, T1+T2) in dark gray
+- **Active**: Mode label in red, glowing bottom edge, red beam with descending lines
+
+---
+
 ## Measurement
 
 Measurement in quantum mechanics is probabilistic and causes **state collapse**.
@@ -279,6 +460,12 @@ Measurement in quantum mechanics is probabilistic and causes **state collapse**.
 2. **Random outcome**: Choose 0 or 1 based on probabilities
 3. **Collapse**: Zero out amplitudes inconsistent with outcome
 4. **Renormalize**: Scale remaining amplitudes so Σ|α_i|² = 1
+
+### How to Measure
+
+1. Click the **Measure** button to enter measurement mode
+2. Click on any qubit to measure it
+3. The qubit collapses to either |0⟩ or |1⟩
 
 ### Effect on Entanglement
 
@@ -291,6 +478,40 @@ Measurement in quantum mechanics is probabilistic and causes **state collapse**.
 | Entangled | Not entangled |
 
 This is correct quantum behavior—the correlations that defined the entanglement are "used up" in determining the measurement outcome.
+
+### Effect on Dephasing
+
+Measurement also resets the T2 dephasing factor for the measured qubit back to 1.0, since the qubit is now in a definite computational basis state.
+
+---
+
+## Pauli Basis Visualization
+
+The **Pauli Basis Dome** at the top of the screen provides a visualization of the full density matrix in the Pauli operator basis.
+
+### What It Shows
+
+For an N-qubit system, the density matrix can be expanded in the Pauli basis:
+
+```
+ρ = (1/2^N) Σᵢ cᵢ Pᵢ
+```
+
+where Pᵢ are tensor products of Pauli matrices {I, X, Y, Z}.
+
+### Visualization
+
+- **Grid cells**: Each cell represents a Pauli basis coefficient
+- **Color**: Red = positive, Blue = negative
+- **Intensity**: Magnitude of the coefficient
+- **Size**: 2×2 for 1 qubit, 4×4 for 2 qubits, 8×8 for 3 qubits, etc.
+
+### Expanded View
+
+Click on the Pauli Basis dome to open an expanded view with:
+- Larger visualization
+- Tooltips showing exact values
+- Detailed coefficient information
 
 ---
 
@@ -305,21 +526,54 @@ This is correct quantum behavior—the correlations that defined the entanglemen
    ```
 3. Open http://localhost:8080 in your browser
 
-### Controls
+### Quick Tutorial
 
-| Control | Action |
-|---------|--------|
-| **+ / -** | Add or remove qubits |
-| **Move** | Drag qubits to reposition them |
-| **Measure** | Click a qubit to measure it |
-| **Random** | Generate a random quantum state |
+1. **Explore a single qubit**: The app starts with one qubit in a random state. Observe the Bloch sphere and how the red arrow indicates the state.
 
-### Creating Entanglement
+2. **Apply a gate**: Click **Operate** to activate the gate beam, then drag the qubit into the yellow beam. Watch it rotate around the X-axis. Click the gate selector (metal box) to change to Y, Z, S, or T gates.
 
-1. Add at least 2 qubits
-2. In Move mode, drag one qubit close to another
-3. Watch the exchange interaction create entanglement
-4. Separate them—the entanglement persists!
+3. **Add more qubits**: Click **+** to add qubits (up to 6). Each gets its own Bloch sphere.
+
+4. **Create entanglement**: Drag two qubits close together. The Heisenberg exchange interaction will entangle them—watch the purple lines appear!
+
+5. **Observe decoherence**: Click **Decohere** to activate the red beam. Drag an entangled qubit into it. Watch the Bloch sphere shrink as coherence is lost.
+
+6. **Measure**: Click **Measure**, then click a qubit. The state collapses and entanglement with that qubit is destroyed.
+
+7. **Randomize**: Click **Random** to generate a new random quantum state.
+
+---
+
+## Controls Reference
+
+### Bottom Control Bar
+
+| Button | Icon | Action |
+|--------|------|--------|
+| **+** | + | Add a qubit (max 6) |
+| **-** | − | Remove a qubit (min 1) |
+| **Move** | ✋ | Enter move mode—drag qubits to reposition |
+| **Measure** | 👁 | Enter measure mode—click qubit to collapse |
+| **Operate** | 🕹️ | Toggle the gate beam on/off |
+| **Decohere** | 💀 | Toggle the decoherence beam on/off |
+| **Random** | 🎲 | Generate a random quantum state |
+
+### Metal Box Selectors
+
+| Selector | Location | Behavior |
+|----------|----------|----------|
+| **Gate Selector** | Top-left | Click when beam OFF → turns beam ON. Click when beam ON → cycles gate (X→Y→Z→S→T→X...) |
+| **Decoherence Selector** | Top-right | Click when beam OFF → turns beam ON. Click when beam ON → cycles mode (T2→T1→T1+T2→T2...) |
+
+### Mouse/Touch Interactions
+
+| Action | Effect |
+|--------|--------|
+| Drag qubit | Move qubit position (in Move mode) |
+| Click qubit | Measure qubit (in Measure mode) |
+| Drag qubit into beam | Apply gate or decoherence continuously |
+| Bring qubits close | Creates entanglement via Heisenberg exchange |
+| Click Pauli dome | Open expanded density matrix view |
 
 ---
 
@@ -329,6 +583,38 @@ This is correct quantum behavior—the correlations that defined the entanglemen
 - **HTML5 Canvas** for rendering
 - **math.js** for complex number operations
 - No build system required—runs directly in browser
+
+### File Structure
+
+```
+meqanic/
+├── index.html                 # Main HTML structure
+├── styles.css                 # UI styling
+├── README.md                  # This documentation
+└── src/
+    ├── main.js               # Entry point, animation loop, event handling
+    ├── quantum/
+    │   ├── QuantumState.js   # State vector (single source of truth)
+    │   ├── quantumMath.js    # Partial trace, Pauli matrices, Bloch vectors
+    │   ├── gates.js          # Gate matrices and application
+    │   ├── measurement.js    # Measurement and collapse
+    │   ├── entanglement.js   # Concurrence calculation
+    │   ├── spinExchange.js   # Heisenberg exchange interaction
+    │   └── decoherence.js    # T1/T2 decoherence channels
+    ├── visualization/
+    │   ├── BlochSphere.js    # Single Bloch sphere renderer
+    │   ├── QubitRenderer.js  # Multi-sphere manager
+    │   ├── EntanglementLines.js  # Purple entanglement arcs
+    │   ├── PauliDome.js      # Density matrix visualization
+    │   ├── GateBeam.js       # Yellow gate beam effect
+    │   └── DecoherenceBeam.js # Red decoherence beam effect
+    ├── ui/
+    │   └── ExpandedStateView.js  # Expanded Pauli basis view
+    └── utils/
+        └── geometry.js       # Layout calculations
+```
+
+---
 
 ## Acknowledgments
 
@@ -346,6 +632,8 @@ The paper presents an immersive XR experience for teaching quantum mechanics con
 - Multiple wavy lines connect entangled qubits
 - Line intensity and chaos increase with entanglement entropy S₂(ρ)
 - The visual language makes the abstract concept of entanglement tangible
+
+---
 
 ## References
 

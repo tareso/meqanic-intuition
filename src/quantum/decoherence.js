@@ -117,7 +117,12 @@ export function applyT1Relaxation(state, qubitIndex, dt, rate = 1.5) {
         }
     }
 
-    return new QuantumState(numQubits, newAmplitudes);
+    const newState = new QuantumState(numQubits, newAmplitudes);
+
+    // Preserve dephasing factors from original state
+    newState.dephasingFactors = [...state.dephasingFactors];
+
+    return newState;
 }
 
 /**
