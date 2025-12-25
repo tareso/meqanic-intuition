@@ -95,18 +95,33 @@ export function createRotationGate(axis, angle) {
 
 /**
  * Create a Hadamard rotation gate (rotation around (X+Z)/√2 axis)
- * For continuous application
- * @param {number} t - Time parameter (0 to 1, where 1 gives full H gate)
- * @returns {Array<Array>} 2x2 matrix
+ * The Hadamard gate is a π rotation around the (X+Z)/√2 axis on the Bloch sphere.
+ * For continuous application, we rotate by angle θ around this axis.
+ *
+ * R_H(θ) = cos(θ/2)I - i*sin(θ/2) * (X + Z)/√2
+ *
+ * @param {number} angle - Rotation angle in radians
+ * @returns {Array<Array>} 2x2 rotation matrix
  */
-export function createHadamardRotation(t) {
-    // Interpolate between Identity and Hadamard
-    // H(t) = (1-t)I + t*H
-    const h = 1 / Math.sqrt(2);
+export function createHadamardRotation(angle) {
+    const halfAngle = angle / 2;
+    const c = Math.cos(halfAngle);
+    const s = Math.sin(halfAngle);
+
+    // The axis is (1, 0, 1)/√2, so nx = nz = 1/√2, ny = 0
+    // R = cos(θ/2)I - i*sin(θ/2)(nx*X + ny*Y + nz*Z)
+    // R = cos(θ/2)I - i*sin(θ/2)/√2 * (X + Z)
+    //
+    // X + Z = [[1, 1], [1, -1]]
+    //
+    // R = [[cos(θ/2) - i*sin(θ/2)/√2,  -i*sin(θ/2)/√2],
+    //      [-i*sin(θ/2)/√2,             cos(θ/2) + i*sin(θ/2)/√2]]
+
+    const sOverSqrt2 = s / Math.sqrt(2);
 
     return [
-        [complex(1 - t + t * h, 0), complex(t * h, 0)],
-        [complex(t * h, 0), complex(1 - t - t * h, 0)]
+        [complex(c, -sOverSqrt2), complex(0, -sOverSqrt2)],
+        [complex(0, -sOverSqrt2), complex(c, sOverSqrt2)]
     ];
 }
 
@@ -177,9 +192,8 @@ export function applyContinuousGate(state, qubitIndex, gateType, dt, rotationSpe
     let gateMatrix;
 
     if (gateType === 'H') {
-        // For Hadamard, use special continuous rotation
-        const t = Math.min(angle / Math.PI, 1.0);  // Normalize to [0, 1]
-        gateMatrix = createHadamardRotation(t);
+        // For Hadamard, rotate around (X+Z)/√2 axis
+        gateMatrix = createHadamardRotation(angle);
     } else if (gateType === 'S') {
         // S gate is a Z rotation by π/2 (√Z)
         gateMatrix = createRotationGate('Z', angle);
