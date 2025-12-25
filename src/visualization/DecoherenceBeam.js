@@ -138,96 +138,132 @@ export class DecoherenceBeam {
         return Math.min(1, overlapWidth / qubitDiameter);
     }
 
-    drawSelector(ctx, x, y, width, height) {
-        this.selectorBounds = { x, y, width, height };
+    /**
+     * Draw the microwave horn selector (coming from ceiling)
+     */
+    drawSelector(ctx, centerX, hornHeight, openingWidth) {
+        const topWidth = 30; // Narrow at ceiling
+        const bottomWidth = openingWidth; // Wider at opening
+        const topY = 0; // Starts at ceiling
+        const bottomY = hornHeight;
+
+        // Store bounds for click detection
+        this.selectorBounds = {
+            x: centerX - bottomWidth / 2,
+            y: topY,
+            width: bottomWidth,
+            height: hornHeight
+        };
 
         ctx.save();
 
-        // 3D metal box - darker/more sinister silver (matching gate beam style)
-        const mainGradient = ctx.createLinearGradient(x, y, x, y + height);
-        mainGradient.addColorStop(0, '#d0d0d8');
-        mainGradient.addColorStop(0.1, '#e8e8f0');
-        mainGradient.addColorStop(0.3, '#c8c8d0');
-        mainGradient.addColorStop(0.5, '#b0b0b8');
-        mainGradient.addColorStop(0.7, '#a0a0a8');
-        mainGradient.addColorStop(1, '#888890');
+        // Draw the horn shape (trapezoid)
+        const leftTop = centerX - topWidth / 2;
+        const rightTop = centerX + topWidth / 2;
+        const leftBottom = centerX - bottomWidth / 2;
+        const rightBottom = centerX + bottomWidth / 2;
 
+        // Main horn body gradient (slightly darker/redder tint for decoherence)
+        const mainGradient = ctx.createLinearGradient(leftBottom, topY, rightBottom, topY);
+        mainGradient.addColorStop(0, '#807880');
+        mainGradient.addColorStop(0.15, '#a8a0a8');
+        mainGradient.addColorStop(0.3, '#c8c0c8');
+        mainGradient.addColorStop(0.5, '#d8d0d8');
+        mainGradient.addColorStop(0.7, '#c8c0c8');
+        mainGradient.addColorStop(0.85, '#a8a0a8');
+        mainGradient.addColorStop(1, '#807880');
+
+        // Draw horn shape
+        ctx.beginPath();
+        ctx.moveTo(leftTop, topY);
+        ctx.lineTo(rightTop, topY);
+        ctx.lineTo(rightBottom, bottomY);
+        ctx.lineTo(leftBottom, bottomY);
+        ctx.closePath();
         ctx.fillStyle = mainGradient;
-        ctx.fillRect(x, y, width, height);
+        ctx.fill();
 
-        // Top edge highlight (3D effect)
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.fillRect(x, y, width, 3);
-
-        // Left edge highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.fillRect(x, y, 3, height);
-
-        // Bottom edge shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        ctx.fillRect(x, y + height - 3, width, 3);
+        // Left edge highlight (3D effect)
+        ctx.beginPath();
+        ctx.moveTo(leftTop, topY);
+        ctx.lineTo(leftBottom, bottomY);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
         // Right edge shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.fillRect(x + width - 3, y, 3, height);
-
-        // Inner bevel
+        ctx.beginPath();
+        ctx.moveTo(rightTop, topY);
+        ctx.lineTo(rightBottom, bottomY);
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 4, y + 4, width - 8, height - 8);
-
-        // Outer border
-        ctx.strokeStyle = '#606068';
         ctx.lineWidth = 2;
-        ctx.strokeRect(x, y, width, height);
+        ctx.stroke();
 
-        // Mode label with engraved effect (centered, like gate beam)
-        const mode = this.getCurrentMode();
+        // Horn opening rim (bottom edge)
+        ctx.beginPath();
+        ctx.moveTo(leftBottom, bottomY);
+        ctx.lineTo(rightBottom, bottomY);
+        ctx.strokeStyle = '#605860';
+        ctx.lineWidth = 3;
+        ctx.stroke();
 
-        // Shadow for engraved look
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        ctx.font = 'bold 18px "JetBrains Mono", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(mode, x + width / 2 + 1, y + height / 2 + 1);
+        // Inner rim highlight
+        ctx.beginPath();
+        ctx.moveTo(leftBottom + 3, bottomY - 2);
+        ctx.lineTo(rightBottom - 3, bottomY - 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        // Main text
-        ctx.fillStyle = this.isActive ? '#ff6666' : '#404048';
-        ctx.fillText(mode, x + width / 2, y + height / 2);
+        // Ridges on horn for industrial look
+        const numRidges = 3;
+        for (let i = 1; i <= numRidges; i++) {
+            const t = i / (numRidges + 1);
+            const ridgeY = topY + t * hornHeight;
+            const ridgeLeftX = leftTop + t * (leftBottom - leftTop);
+            const ridgeRightX = rightTop + t * (rightBottom - rightTop);
 
-        // Active indicator - red glowing bottom edge
-        if (this.isActive) {
-            ctx.fillStyle = 'rgba(255, 80, 80, 0.8)';
-            ctx.fillRect(x + 4, y + height - 6, width - 8, 3);
+            ctx.beginPath();
+            ctx.moveTo(ridgeLeftX, ridgeY);
+            ctx.lineTo(ridgeRightX, ridgeY);
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
 
-            ctx.shadowColor = 'rgba(255, 80, 80, 0.6)';
-            ctx.shadowBlur = 10;
-            ctx.fillRect(x + 4, y + height - 6, width - 8, 3);
-            ctx.shadowBlur = 0;
+            ctx.beginPath();
+            ctx.moveTo(ridgeLeftX, ridgeY + 1);
+            ctx.lineTo(ridgeRightX, ridgeY + 1);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
         }
 
-        // Screws/rivets for industrial look
-        const screwRadius = 3;
-        const screwOffset = 8;
-        const screwPositions = [
-            [x + screwOffset, y + screwOffset],
-            [x + width - screwOffset, y + screwOffset],
-            [x + screwOffset, y + height - screwOffset],
-            [x + width - screwOffset, y + height - screwOffset]
-        ];
+        // Mode label inside horn opening
+        const mode = this.getCurrentMode();
+        const labelY = bottomY - 15;
 
-        for (const [sx, sy] of screwPositions) {
-            // Screw hole
-            ctx.beginPath();
-            ctx.arc(sx, sy, screwRadius, 0, Math.PI * 2);
-            ctx.fillStyle = '#707078';
-            ctx.fill();
+        // Shadow for depth
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.font = 'bold 16px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(mode, centerX + 1, labelY + 1);
 
-            // Screw highlight
+        // Main text
+        ctx.fillStyle = this.isActive ? '#ff6666' : '#504850';
+        ctx.fillText(mode, centerX, labelY);
+
+        // Active indicator - glowing red rim
+        if (this.isActive) {
             ctx.beginPath();
-            ctx.arc(sx - 1, sy - 1, screwRadius - 1, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.fill();
+            ctx.moveTo(leftBottom + 5, bottomY);
+            ctx.lineTo(rightBottom - 5, bottomY);
+            ctx.strokeStyle = 'rgba(255, 100, 100, 0.9)';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = 'rgba(255, 80, 80, 0.8)';
+            ctx.shadowBlur = 15;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
         }
 
         ctx.restore();
@@ -311,22 +347,20 @@ export class DecoherenceBeam {
 
     draw(ctx, canvasWidth, canvasHeight, timestamp, isMobile = false) {
         const beamWidth = 80;
-        const selectorWidth = beamWidth;
-        const selectorHeight = 45;
-        const padding = 16;
+        const hornHeight = 60; // Height of the microwave horn
+        const padding = 20;
 
-        // Position selector in top-right
-        const selectorX = canvasWidth - padding - selectorWidth;
-        const selectorY = padding;
+        // Position horn on right side, centered horizontally over beam
+        const hornCenterX = canvasWidth - padding - beamWidth / 2;
 
-        this.drawSelector(ctx, selectorX, selectorY, selectorWidth, selectorHeight);
+        // Draw microwave horn selector (coming from ceiling)
+        this.drawSelector(ctx, hornCenterX, hornHeight, beamWidth);
 
         if (this.isActive) {
-            const beamX = selectorX + selectorWidth / 2;
-            const beamTop = selectorY + selectorHeight;
+            const beamTop = hornHeight;
             const beamBottom = canvasHeight;
 
-            this.drawBeam(ctx, beamX, beamTop, beamBottom, beamWidth, timestamp);
+            this.drawBeam(ctx, hornCenterX, beamTop, beamBottom, beamWidth, timestamp);
         }
     }
 }
