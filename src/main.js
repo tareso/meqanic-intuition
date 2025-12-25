@@ -413,7 +413,7 @@ function setupControls() {
 }
 
 function openAbout() {
-    window.open('README.md', '_blank');
+    window.open('https://github.com/tareso/meqanic-intuition#readme', '_blank');
 }
 
 function toggleGateBeam() {
