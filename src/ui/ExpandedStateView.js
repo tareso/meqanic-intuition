@@ -64,10 +64,24 @@ export class ExpandedStateView {
         this.isVisible = true;
         this.fadeIn = 0;
 
-        // Center the window on first show, or keep previous position
-        if (this.windowX === 100 && this.windowY === 100) {
-            this.windowX = (canvasWidth - this.windowWidth) / 2;
-            this.windowY = (canvasHeight - this.windowHeight) / 2;
+        // Responsive sizing for mobile - always apply on mobile
+        const isMobile = canvasWidth < 500;
+        if (isMobile) {
+            const padding = 10;
+            this.windowWidth = canvasWidth - padding * 2;
+            this.windowHeight = Math.min(400, canvasHeight - 150);
+            // Always reset position on mobile to ensure it fits
+            this.windowX = padding;
+            this.windowY = 80; // Below the Pauli dome
+        } else {
+            // Desktop: use default size
+            this.windowWidth = 500;
+            this.windowHeight = 450;
+            // Center on first show or if window is off-screen
+            if (this.windowX < 0 || this.windowX > canvasWidth - 100) {
+                this.windowX = (canvasWidth - this.windowWidth) / 2;
+                this.windowY = (canvasHeight - this.windowHeight) / 2;
+            }
         }
 
         // Ensure window is within bounds
@@ -106,11 +120,21 @@ export class ExpandedStateView {
      * @private
      */
     _constrainToBounds(canvasWidth, canvasHeight) {
-        const margin = 50; // Keep at least this much visible
-        this.windowX = Math.max(-this.windowWidth + margin,
-                                Math.min(canvasWidth - margin, this.windowX));
-        this.windowY = Math.max(0,
-                                Math.min(canvasHeight - margin, this.windowY));
+        const isMobile = canvasWidth < 500;
+
+        if (isMobile) {
+            // On mobile, keep window fully visible with small padding
+            const padding = 10;
+            this.windowX = Math.max(padding, Math.min(canvasWidth - this.windowWidth - padding, this.windowX));
+            this.windowY = Math.max(0, Math.min(canvasHeight - 100, this.windowY));
+        } else {
+            // On desktop, allow partial off-screen for flexibility
+            const margin = 50;
+            this.windowX = Math.max(-this.windowWidth + margin,
+                                    Math.min(canvasWidth - margin, this.windowX));
+            this.windowY = Math.max(0,
+                                    Math.min(canvasHeight - margin, this.windowY));
+        }
     }
 
     /**
@@ -301,6 +325,17 @@ export class ExpandedStateView {
      * @private
      */
     _drawWindow(ctx, canvasWidth, canvasHeight, timestamp) {
+        // Force mobile layout if canvas is narrow
+        const isMobile = canvasWidth < 500;
+        if (isMobile) {
+            const padding = 10;
+            this.windowWidth = canvasWidth - padding * 2;
+            this.windowX = padding;
+            if (this.windowHeight > canvasHeight - 150) {
+                this.windowHeight = canvasHeight - 150;
+            }
+        }
+
         const x = this.windowX;
         const y = this.windowY;
         const w = this.windowWidth;
