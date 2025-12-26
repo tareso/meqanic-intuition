@@ -6,7 +6,7 @@ An interactive quantum state visualizer using Bloch spheres and entanglement arc
 
 **[Live Demo](https://tareso.github.io/meqanic-intuition/)**
 
-![Two Qubit Bell State](docs/two-qubit-bell.png)
+![Three Qubit Entangled State](docs/three-qubit-entangled.png)
 
 ## Philosophy
 
@@ -16,6 +16,7 @@ An interactive quantum state visualizer using Bloch spheres and entanglement arc
 - Each Bloch sphere shows the *reduced* state after tracing out other qubits
 - The golden inner sphere represents purity—entangled qubits appear mixed
 - Oscillating arcs visualize quantum correlations (concurrence)
+- Vibe coded to explore ideas for quantum visualization in museum-like educational experiences (see references below)
 
 ## Quick Start
 
