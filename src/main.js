@@ -11,6 +11,7 @@ import { PauliDome } from './visualization/PauliDome.js';
 import { ExpandedStateView } from './ui/ExpandedStateView.js';
 import { GateBeam } from './visualization/GateBeam.js';
 import { DecoherenceBeam } from './visualization/DecoherenceBeam.js';
+import { SantaEasterEgg } from './visualization/SantaEasterEgg.js';
 import { GATES, applySingleQubitGate, applyContinuousGate } from './quantum/gates.js';
 import { applyDecoherence } from './quantum/decoherence.js';
 import { complex } from './quantum/quantumMath.js';
@@ -30,6 +31,7 @@ const state = {
     expandedStateView: null,
     gateBeam: null,
     decoherenceBeam: null,
+    santaEasterEgg: null,
     lastTimestamp: 0,
     mode: 'move',  // 'move' or 'measure'
     dragging: {
@@ -97,6 +99,9 @@ function init() {
 
     // Create decoherence beam
     state.decoherenceBeam = new DecoherenceBeam();
+
+    // Create Santa Easter egg (only appears on Christmas)
+    state.santaEasterEgg = new SantaEasterEgg();
 
     // Set up event handlers
     setupEventListeners();
@@ -644,6 +649,9 @@ function update(dt) {
     if (stateChanged) {
         onStateChanged();
     }
+
+    // Update Santa Easter egg animation
+    state.santaEasterEgg.update(dt, state.lastTimestamp, state.canvas.width, state.canvas.height);
 }
 
 function render(timestamp) {
@@ -683,6 +691,9 @@ function render(timestamp) {
         const purity = quantumState.getPurity(i);
         blochSpheres[i].draw(ctx, blochVector, purity, i, timestamp);
     }
+
+    // Draw Santa Easter egg (flies over the qubits)
+    state.santaEasterEgg.draw(ctx);
 
     // Draw expanded state view on top (floating window)
     if (expandedStateView.isVisible) {
@@ -867,6 +878,11 @@ window.meqanic = {
         positions.forEach((p, i) => state.quantumState.setQubitPosition(i, p.x, p.y));
         onStateChanged();
         console.log('Set to |01⟩ state - drag qubits close to see exchange create entanglement!');
+    },
+    // Force Santa to appear (for testing the Easter egg)
+    summonSanta: () => {
+        state.santaEasterEgg.forceAppear(state.canvas.width, state.canvas.height);
+        console.log('🎅 Ho ho ho! Santa is flying by!');
     }
 };
 

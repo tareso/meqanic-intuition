@@ -346,3 +346,7 @@ MEQANIC Intuition is part of the MEQANIC project: [meqanic.com](https://meqanic.
 ## License
 
 MIT
+
+---
+
+For more information, connect with me on [LinkedIn](https://www.linkedin.com/in/tahan/).
