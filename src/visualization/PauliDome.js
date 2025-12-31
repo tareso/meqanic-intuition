@@ -1,11 +1,11 @@
 /**
  * PauliDome.js
- * Renders a semicircular grid visualization of the Pauli basis coefficients
+ * Renders a semicircular grid visualization of Pauli expectation values
  *
- * Shows the density matrix in Pauli basis as colored tiles:
- * - Blue = negative values
+ * Shows ⟨P⟩ = ⟨ψ|P|ψ⟩ for all Pauli strings P = σ_{i₁}⊗...⊗σ_{iₙ}
+ * - Blue = negative expectation values
  * - White = zero
- * - Red = positive values
+ * - Red = positive expectation values
  */
 
 import {
@@ -167,7 +167,7 @@ export class PauliDome {
         ctx.font = '11px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(`Pauli Basis (${cols}×${rows})`, centerX, y + height + 5);
+        ctx.fillText(`⟨P⟩ (${cols}×${rows})`, centerX, y + height + 5);
 
         // Draw "click to expand" hint if hovered
         if (this.isHovered) {
@@ -223,7 +223,7 @@ export class PauliDome {
         ctx.font = 'bold 20px "Inter", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Density Matrix in Pauli Basis', canvasWidth / 2, 30);
+        ctx.fillText('Pauli Expectation Matrix', canvasWidth / 2, 30);
 
         // Draw close button
         const closeBtn = { x: canvasWidth - 50, y: 15, w: 30, h: 30 };

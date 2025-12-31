@@ -1,29 +1,31 @@
 /**
  * pauliBasis.js
- * Computes the Pauli basis representation of a quantum state's density matrix
+ * Computes Pauli expectation values for a quantum state
  *
  * OPTIMIZED VERSION: Uses direct Pauli application instead of matrix elements
  * Complexity reduced from O(4^N × 4^N) to O(4^N × 2^N)
  *
- * For N qubits, the density matrix can be expanded as:
- * ρ = (1/2^N) Σ c_{i₁i₂...iₙ} (σ_{i₁} ⊗ σ_{i₂} ⊗ ... ⊗ σ_{iₙ})
+ * For N qubits, computes all 4^N Pauli expectation values:
+ * ⟨P⟩ = ⟨ψ|P|ψ⟩ where P = σ_{i₁} ⊗ σ_{i₂} ⊗ ... ⊗ σ_{iₙ}
  *
- * where c_{i₁i₂...iₙ} = ⟨ψ|σ_{i₁}⊗...⊗σ_{iₙ}|ψ⟩
+ * These are the coefficients in the Pauli basis expansion of the density matrix:
+ * ρ = (1/2^N) Σ ⟨P⟩ P
  */
 
 const PAULI_LABELS = ['I', 'X', 'Y', 'Z'];
 
 /**
  * Get the label for a Pauli basis index
+ * Label is in tensor product order: first character = qubit 0's Pauli
  * @param {number} index - Index from 0 to 4^N - 1
  * @param {number} numQubits - Number of qubits
- * @returns {string} Label like "IXZ", "YYI", etc.
+ * @returns {string} Label like "ZI" for Z⊗I (Z on q0, I on q1)
  */
 export function getPauliLabel(index, numQubits) {
     let label = '';
     for (let q = numQubits - 1; q >= 0; q--) {
         const pauliIdx = (index >> (2 * q)) & 3;
-        label = PAULI_LABELS[pauliIdx] + label;
+        label = label + PAULI_LABELS[pauliIdx];
     }
     return label;
 }
@@ -189,11 +191,11 @@ function computePauliExpectation(amplitudes, pauliIndex, numQubits, tempRe1, tem
 }
 
 /**
- * Compute all Pauli basis coefficients for a quantum state
+ * Compute all Pauli expectation values for a quantum state
  * OPTIMIZED: O(4^N × N × 2^N) instead of O(4^N × 4^N)
  *
  * @param {QuantumState} state - Quantum state object
- * @returns {Float64Array} Array of 4^N real coefficients
+ * @returns {Float64Array} Array of 4^N real expectation values ⟨P⟩
  */
 export function computePauliCoefficients(state) {
     const numQubits = state.numQubits;
@@ -243,9 +245,9 @@ export function indexToGridPosition(index, numQubits) {
 }
 
 /**
- * Get summary statistics for the Pauli coefficients
- * @param {Float64Array} coefficients - Pauli coefficients
- * @returns {object} Statistics including min, max, and significant coefficients
+ * Get summary statistics for the Pauli expectation values
+ * @param {Float64Array} coefficients - Pauli expectation values
+ * @returns {object} Statistics including min, max, and significant values
  */
 export function getPauliStats(coefficients) {
     let min = Infinity;

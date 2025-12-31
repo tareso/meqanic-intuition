@@ -8,6 +8,7 @@
  */
 
 import { PauliDome } from '../visualization/PauliDome.js';
+import { getPauliLabel } from '../quantum/pauliBasis.js';
 
 export class ExpandedStateView {
     constructor() {
@@ -235,7 +236,7 @@ export class ExpandedStateView {
         // Handle tooltips when inside window
         if (this.containsPoint(x, y)) {
             if (this.currentView === 'pauli' && this.gridBounds) {
-                this.tooltipText = this.pauliDome.getTooltipAt(x, y, this.gridBounds);
+                this.tooltipText = this._getPauliTooltip(x, y);
                 this.tooltipX = x;
                 this.tooltipY = y;
             } else {
@@ -378,7 +379,7 @@ export class ExpandedStateView {
 
         // Draw title
         const titles = {
-            'pauli': 'Density Matrix (Pauli Basis)',
+            'pauli': 'Pauli Expectation Matrix',
             'vector': 'State Vector',
             'correlation': 'Correlation Matrix'
         };
@@ -429,57 +430,142 @@ export class ExpandedStateView {
     }
 
     /**
-     * Draw Pauli basis content
+     * Get tooltip text for Pauli matrix cell at given coordinates
+     * @private
+     */
+    _getPauliTooltip(x, y) {
+        if (!this.gridBounds || !this._currentState) return null;
+
+        const { x: gx, y: gy, w: gw, h: gh } = this.gridBounds;
+        if (x < gx || x > gx + gw || y < gy || y > gy + gh) return null;
+
+        const numQubits = this._currentState.numQubits;
+        const gridDim = Math.pow(2, numQubits);
+        const tileSize = gw / gridDim;
+
+        const col = Math.floor((x - gx) / tileSize);
+        const row = Math.floor((y - gy) / tileSize);
+
+        if (row >= 0 && row < gridDim && col >= 0 && col < gridDim) {
+            const label = this._getCellLabel(row, col, numQubits);
+            const flatIdx = this._gridToFlatIndex(row, col, numQubits);
+            const coefficients = this.pauliDome._coefficients;
+            if (coefficients && flatIdx < coefficients.length) {
+                const value = coefficients[flatIdx];
+                return `⟨${label}⟩ = ${value.toFixed(4)}`;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Convert (row, col) grid position to flat Pauli index using standard ordering
+     * Standard ordering: row bits = bit1 of each qubit's Pauli, col bits = bit0
+     * This places Z in bottom-right of each 2×2 sub-block
+     * @private
+     */
+    _gridToFlatIndex(row, col, numQubits) {
+        let index = 0;
+        for (let i = 0; i < numQubits; i++) {
+            const bitPos = numQubits - 1 - i;
+            const rowBit = (row >> bitPos) & 1;  // bit 1 of Pauli for qubit i
+            const colBit = (col >> bitPos) & 1;  // bit 0 of Pauli for qubit i
+            const pauliIdx = 2 * rowBit + colBit;  // 0=I, 1=X, 2=Y, 3=Z
+            index |= (pauliIdx << (2 * (numQubits - 1 - i)));
+        }
+        return index;
+    }
+
+    /**
+     * Get Pauli label for a grid cell using standard ordering
+     * @private
+     */
+    _getCellLabel(row, col, numQubits) {
+        const PAULIS = ['I', 'X', 'Y', 'Z'];
+        let label = '';
+        for (let i = 0; i < numQubits; i++) {
+            const bitPos = numQubits - 1 - i;
+            const rowBit = (row >> bitPos) & 1;
+            const colBit = (col >> bitPos) & 1;
+            const pauliIdx = 2 * rowBit + colBit;
+            label += PAULIS[pauliIdx];
+        }
+        return label;
+    }
+
+    /**
+     * Draw Pauli expectation matrix content with labels
+     * Uses standard Pauli ordering: (0,0)→I, (0,1)→X, (1,0)→Y, (1,1)→Z (Z in bottom-right)
+     * Uses tensor product order: Q0⊗Q1⊗... (top qubit leftmost in labels)
      * @private
      */
     _drawPauliContent(ctx, x, y, w, h, timestamp) {
         if (!this._currentState) return;
 
         const state = this._currentState;
-        const { rows, cols } = this.pauliDome._numQubits > 0
-            ? { rows: Math.pow(2, state.numQubits), cols: Math.pow(2, state.numQubits) }
-            : { rows: 2, cols: 2 };
+        const numQubits = state.numQubits;
+        const gridDim = Math.pow(2, numQubits);
+        const PAULIS = ['I', 'X', 'Y', 'Z'];
 
         const coefficients = this.pauliDome._coefficients;
         if (!coefficients) return;
 
         const stats = this.pauliDome._stats;
-        const gridDim = Math.pow(2, state.numQubits);
+
+        // Calculate space needed for labels
+        const labelSpace = numQubits <= 2 ? 40 : 50;
+        const legendHeight = 50;
+        const availableW = w - labelSpace - 10;
+        const availableH = h - legendHeight - labelSpace - 20;
 
         // Calculate tile size
-        const legendHeight = 40;
-        const availableH = h - legendHeight - 10;
         const tileSize = Math.min(
-            (w - 40) / gridDim,
+            availableW / gridDim,
             availableH / gridDim,
-            35
+            40
         );
 
         const gridWidth = gridDim * tileSize;
         const gridHeight = gridDim * tileSize;
-        const gridX = x + (w - gridWidth) / 2;
-        const gridY = y + 10;
+        const gridX = x + labelSpace + (availableW - gridWidth) / 2;
+        const gridY = y + labelSpace + 10;
 
         // Store grid bounds for tooltips
         this.gridBounds = { x: gridX, y: gridY, w: gridWidth, h: gridHeight };
 
-        // Draw grid
-        for (let idx = 0; idx < coefficients.length; idx++) {
-            const row = Math.floor(idx / gridDim);
-            const col = idx % gridDim;
-            const coeff = coefficients[idx];
+        // No axis labels for now - cell labels are clearer with standard ordering
+        // The grid structure is hierarchical with Z in bottom-right of each 2×2 block
 
-            const tileX = gridX + col * tileSize;
-            const tileY = gridY + row * tileSize;
+        // Draw grid cells using standard ordering
+        for (let row = 0; row < gridDim; row++) {
+            for (let col = 0; col < gridDim; col++) {
+                // Map (row, col) to flat coefficient index using standard ordering
+                const flatIdx = this._gridToFlatIndex(row, col, numQubits);
+                const coeff = coefficients[flatIdx];
 
-            // Get color from PauliDome
-            ctx.fillStyle = this.pauliDome._getColor(coeff);
-            ctx.fillRect(tileX, tileY, tileSize, tileSize);
+                const tileX = gridX + col * tileSize;
+                const tileY = gridY + row * tileSize;
 
-            // Draw border
-            ctx.strokeStyle = 'rgba(50, 50, 70, 0.5)';
-            ctx.lineWidth = 0.5;
-            ctx.strokeRect(tileX, tileY, tileSize, tileSize);
+                // Get color from PauliDome
+                ctx.fillStyle = this.pauliDome._getColor(coeff);
+                ctx.fillRect(tileX, tileY, tileSize, tileSize);
+
+                // Draw border
+                ctx.strokeStyle = 'rgba(50, 50, 70, 0.5)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(tileX, tileY, tileSize, tileSize);
+
+                // Show value inside cell for small grids with large enough cells
+                if (gridDim <= 4 && tileSize >= 30) {
+                    const label = this._getCellLabel(row, col, numQubits);
+                    ctx.fillStyle = Math.abs(coeff) > (stats?.absMax || 1) * 0.5 ? '#000' : '#666';
+                    ctx.font = `${Math.min(9, tileSize * 0.25)}px "JetBrains Mono", monospace`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(label, tileX + tileSize / 2, tileY + tileSize / 2 - 5);
+                    ctx.fillText(coeff.toFixed(2), tileX + tileSize / 2, tileY + tileSize / 2 + 7);
+                }
+            }
         }
 
         // Draw grid border
@@ -488,7 +574,7 @@ export class ExpandedStateView {
         ctx.strokeRect(gridX, gridY, gridWidth, gridHeight);
 
         // Draw color legend
-        const legendY = gridY + gridHeight + 15;
+        const legendY = gridY + gridHeight + 20;
         const legendWidth = Math.min(150, w - 40);
         const legendH = 12;
         const legendX = x + (w - legendWidth) / 2;

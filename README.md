@@ -259,17 +259,17 @@ The T2 dephasing factor resets to 1.0 for the measured qubit.
 
 Click the **Pauli Dome** at top-center to open a draggable floating window with three visualization modes:
 
-#### Pauli Matrix View
+#### Pauli Expectation Matrix
 
-Displays the density matrix expanded in the Pauli basis:
+Displays Pauli expectation values ⟨P⟩ = ⟨ψ|P|ψ⟩ for all Pauli strings:
 
 ```
-ρ = (1/2^N) Σᵢ cᵢ Pᵢ
+⟨P⟩ = ⟨ψ|σ_{i₁}⊗...⊗σ_{iₙ}|ψ⟩
 ```
 
 - **Grid size**: 2×2 (1 qubit), 4×4 (2 qubits), 8×8 (3 qubits), etc.
 - **Colors**: Red = positive, Blue = negative, intensity = magnitude
-- **Hover**: Shows exact coefficient values
+- **Hover**: Shows exact expectation values
 
 #### State Vector View
 
