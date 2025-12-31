@@ -2,9 +2,12 @@
  * ExpandedStateView.js
  * Floating draggable window for viewing quantum state details
  *
- * Provides two views:
- * 1. Pauli Matrix - Density matrix in Pauli basis
- * 2. State Vector - Amplitude list with magnitudes
+ * Provides five views:
+ * 1. Pauli Expectation Matrix - Pauli expectation values ⟨P⟩
+ * 2. State Vector (bars) - Amplitude list with magnitude bars
+ * 3. Correlation Matrix - Pairwise qubit correlations
+ * 4. Density Matrix - Hinton diagram showing ρ = |ψ⟩⟨ψ|
+ * 5. State Vector (ket) - Mathematical |ψ⟩ = Σ αᵢ|i⟩ notation
  */
 
 import { PauliDome } from '../visualization/PauliDome.js';
@@ -13,8 +16,8 @@ import { getPauliLabel } from '../quantum/pauliBasis.js';
 export class ExpandedStateView {
     constructor() {
         this.isVisible = false;
-        this.currentView = 'pauli'; // 'pauli', 'vector', or 'correlation'
-        this.viewOrder = ['pauli', 'vector', 'correlation'];
+        this.currentView = 'pauli';
+        this.viewOrder = ['pauli', 'density', 'ket', 'vector', 'correlation'];
         this.pauliDome = new PauliDome();
 
         // Window position and size
@@ -29,6 +32,17 @@ export class ExpandedStateView {
         this.isDragging = false;
         this.dragOffsetX = 0;
         this.dragOffsetY = 0;
+
+        // Resizing state
+        this.isResizing = false;
+        this.resizeEdge = null; // 'n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'
+        this.resizeStartX = 0;
+        this.resizeStartY = 0;
+        this.resizeStartWidth = 0;
+        this.resizeStartHeight = 0;
+        this.resizeStartWindowX = 0;
+        this.resizeStartWindowY = 0;
+        this.resizeHandleSize = 8;
 
         // Scrolling state for state vector view
         this.scrollOffset = 0;
@@ -159,6 +173,20 @@ export class ExpandedStateView {
     handleMouseDown(x, y) {
         if (!this.isVisible) return false;
 
+        // Check for resize edge first
+        const resizeEdge = this._getResizeEdge(x, y);
+        if (resizeEdge) {
+            this.isResizing = true;
+            this.resizeEdge = resizeEdge;
+            this.resizeStartX = x;
+            this.resizeStartY = y;
+            this.resizeStartWidth = this.windowWidth;
+            this.resizeStartHeight = this.windowHeight;
+            this.resizeStartWindowX = this.windowX;
+            this.resizeStartWindowY = this.windowY;
+            return true;
+        }
+
         // Check if clicking on title bar to start dragging
         if (this.titleBarBounds && this._isInside(x, y, this.titleBarBounds)) {
             // Don't start drag if clicking close button
@@ -209,16 +237,54 @@ export class ExpandedStateView {
      * @param {number} y - Mouse Y coordinate
      * @param {number} canvasWidth - Canvas width for bounds
      * @param {number} canvasHeight - Canvas height for bounds
-     * @returns {boolean} True if dragging
+     * @returns {{handled: boolean, cursor: string}} Result with cursor style
      */
     handleMouseMove(x, y, canvasWidth, canvasHeight) {
-        if (!this.isVisible) return false;
+        if (!this.isVisible) return { handled: false, cursor: 'default' };
+
+        // Handle resizing
+        if (this.isResizing) {
+            const deltaX = x - this.resizeStartX;
+            const deltaY = y - this.resizeStartY;
+            const edge = this.resizeEdge;
+
+            let newX = this.resizeStartWindowX;
+            let newY = this.resizeStartWindowY;
+            let newW = this.resizeStartWidth;
+            let newH = this.resizeStartHeight;
+
+            // Adjust dimensions based on which edge is being dragged
+            if (edge.includes('e')) {
+                newW = Math.max(this.minWidth, this.resizeStartWidth + deltaX);
+            }
+            if (edge.includes('w')) {
+                const widthDelta = Math.min(deltaX, this.resizeStartWidth - this.minWidth);
+                newX = this.resizeStartWindowX + widthDelta;
+                newW = this.resizeStartWidth - widthDelta;
+            }
+            if (edge.includes('s')) {
+                newH = Math.max(this.minHeight, this.resizeStartHeight + deltaY);
+            }
+            if (edge.includes('n')) {
+                const heightDelta = Math.min(deltaY, this.resizeStartHeight - this.minHeight);
+                newY = this.resizeStartWindowY + heightDelta;
+                newH = this.resizeStartHeight - heightDelta;
+            }
+
+            this.windowX = newX;
+            this.windowY = newY;
+            this.windowWidth = newW;
+            this.windowHeight = newH;
+            this._constrainToBounds(canvasWidth, canvasHeight);
+
+            return { handled: true, cursor: this._getCursorForEdge(edge) };
+        }
 
         if (this.isDragging) {
             this.windowX = x - this.dragOffsetX;
             this.windowY = y - this.dragOffsetY;
             this._constrainToBounds(canvasWidth, canvasHeight);
-            return true;
+            return { handled: true, cursor: 'move' };
         }
 
         // Handle scroll bar dragging
@@ -230,7 +296,13 @@ export class ExpandedStateView {
                 this.scrollOffset = Math.max(0, Math.min(this.maxScroll,
                     this.scrollDragStartOffset + scrollRatio * this.maxScroll));
             }
-            return true;
+            return { handled: true, cursor: 'default' };
+        }
+
+        // Check for resize edge hover
+        const resizeEdge = this._getResizeEdge(x, y);
+        if (resizeEdge) {
+            return { handled: false, cursor: this._getCursorForEdge(resizeEdge) };
         }
 
         // Handle tooltips when inside window
@@ -242,21 +314,24 @@ export class ExpandedStateView {
             } else {
                 this.tooltipText = null;
             }
+            return { handled: false, cursor: 'default' };
         } else {
             this.tooltipText = null;
         }
 
-        return false;
+        return { handled: false, cursor: 'default' };
     }
 
     /**
      * Handle mouse up events
-     * @returns {boolean} True if was dragging
+     * @returns {boolean} True if was dragging or resizing
      */
     handleMouseUp() {
-        const wasDragging = this.isDragging || this.isScrollDragging;
+        const wasDragging = this.isDragging || this.isScrollDragging || this.isResizing;
         this.isDragging = false;
         this.isScrollDragging = false;
+        this.isResizing = false;
+        this.resizeEdge = null;
         return wasDragging;
     }
 
@@ -292,6 +367,58 @@ export class ExpandedStateView {
     _isInside(x, y, rect) {
         return x >= rect.x && x <= rect.x + rect.w &&
                y >= rect.y && y <= rect.y + rect.h;
+    }
+
+    /**
+     * Get the resize edge at a given point
+     * @private
+     * @returns {string|null} Edge identifier or null
+     */
+    _getResizeEdge(x, y) {
+        const hs = this.resizeHandleSize;
+        const wx = this.windowX;
+        const wy = this.windowY;
+        const ww = this.windowWidth;
+        const wh = this.windowHeight;
+
+        const onLeft = x >= wx - hs && x <= wx + hs;
+        const onRight = x >= wx + ww - hs && x <= wx + ww + hs;
+        const onTop = y >= wy - hs && y <= wy + hs;
+        const onBottom = y >= wy + wh - hs && y <= wy + wh + hs;
+        const inHorizRange = x >= wx - hs && x <= wx + ww + hs;
+        const inVertRange = y >= wy - hs && y <= wy + wh + hs;
+
+        // Corners first (they take priority)
+        if (onTop && onLeft) return 'nw';
+        if (onTop && onRight) return 'ne';
+        if (onBottom && onLeft) return 'sw';
+        if (onBottom && onRight) return 'se';
+
+        // Edges
+        if (onTop && inHorizRange) return 'n';
+        if (onBottom && inHorizRange) return 's';
+        if (onLeft && inVertRange) return 'w';
+        if (onRight && inVertRange) return 'e';
+
+        return null;
+    }
+
+    /**
+     * Get cursor style for a resize edge
+     * @private
+     */
+    _getCursorForEdge(edge) {
+        const cursors = {
+            'n': 'ns-resize',
+            's': 'ns-resize',
+            'e': 'ew-resize',
+            'w': 'ew-resize',
+            'ne': 'nesw-resize',
+            'sw': 'nesw-resize',
+            'nw': 'nwse-resize',
+            'se': 'nwse-resize'
+        };
+        return cursors[edge] || 'default';
     }
 
     /**
@@ -361,6 +488,29 @@ export class ExpandedStateView {
         ctx.lineWidth = 1;
         ctx.stroke();
 
+        // Draw resize handles at corners (only on desktop)
+        if (!isMobile) {
+            const hs = this.resizeHandleSize;
+            ctx.fillStyle = 'rgba(100, 150, 200, 0.4)';
+
+            // Bottom-right corner (most common resize)
+            ctx.beginPath();
+            ctx.moveTo(x + w, y + h - hs * 2);
+            ctx.lineTo(x + w, y + h);
+            ctx.lineTo(x + w - hs * 2, y + h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Small corner indicators
+            ctx.fillStyle = 'rgba(100, 150, 200, 0.3)';
+            // Top-left
+            ctx.fillRect(x, y, hs, hs);
+            // Top-right
+            ctx.fillRect(x + w - hs, y, hs, hs);
+            // Bottom-left
+            ctx.fillRect(x, y + h - hs, hs, hs);
+        }
+
         // Draw title bar background
         ctx.fillStyle = 'rgba(30, 41, 59, 0.9)';
         ctx.beginPath();
@@ -380,7 +530,9 @@ export class ExpandedStateView {
         // Draw title
         const titles = {
             'pauli': 'Pauli Expectation Matrix',
-            'vector': 'State Vector',
+            'density': 'Density Matrix',
+            'ket': 'State Vector (Ket)',
+            'vector': 'State Vector (Bars)',
             'correlation': 'Correlation Matrix'
         };
         const title = titles[this.currentView] || 'Quantum State';
@@ -419,6 +571,10 @@ export class ExpandedStateView {
 
         if (this.currentView === 'pauli') {
             this._drawPauliContent(ctx, contentX, contentY, contentW, contentH, timestamp);
+        } else if (this.currentView === 'density') {
+            this._drawDensityMatrixContent(ctx, contentX, contentY, contentW, contentH);
+        } else if (this.currentView === 'ket') {
+            this._drawKetNotationContent(ctx, contentX, contentY, contentW, contentH);
         } else if (this.currentView === 'vector') {
             this._drawStateVectorContent(ctx, contentX, contentY, contentW, contentH);
         } else if (this.currentView === 'correlation') {
@@ -518,11 +674,10 @@ export class ExpandedStateView {
         const availableW = w - labelSpace - 10;
         const availableH = h - legendHeight - labelSpace - 20;
 
-        // Calculate tile size
+        // Calculate tile size - fill available space (no max cap)
         const tileSize = Math.min(
             availableW / gridDim,
-            availableH / gridDim,
-            40
+            availableH / gridDim
         );
 
         const gridWidth = gridDim * tileSize;
@@ -963,6 +1118,365 @@ export class ExpandedStateView {
     }
 
     /**
+     * Draw density matrix content as Hinton diagram
+     * Shows ρ = |ψ⟩⟨ψ| with square size = magnitude, arrow direction = phase
+     * @private
+     */
+    _drawDensityMatrixContent(ctx, x, y, w, h) {
+        if (!this._currentState) return;
+
+        const state = this._currentState;
+        const dim = state.dimension;
+        const n = state.numQubits;
+
+        // Layout calculations
+        const labelSpace = n <= 3 ? 50 : 40;
+        const legendHeight = 50;
+        const availableW = w - labelSpace - 10;
+        const availableH = h - legendHeight - labelSpace - 10;
+
+        // Calculate cell size to fit all states - fill available space (no max cap)
+        const cellSize = Math.min(
+            availableW / dim,
+            availableH / dim
+        );
+
+        const gridWidth = dim * cellSize;
+        const gridHeight = dim * cellSize;
+        const gridX = x + labelSpace + (availableW - gridWidth) / 2;
+        const gridY = y + labelSpace;
+
+        // Find max magnitude for scaling
+        let maxMag = 0;
+        for (let i = 0; i < dim; i++) {
+            for (let j = 0; j < dim; j++) {
+                // ρᵢⱼ = ψᵢ × conj(ψⱼ)
+                const ampI = state.amplitudes[i];
+                const ampJ = state.amplitudes[j];
+                const re = ampI.re * ampJ.re + ampI.im * ampJ.im;
+                const im = ampI.im * ampJ.re - ampI.re * ampJ.im;
+                const mag = Math.sqrt(re * re + im * im);
+                if (mag > maxMag) maxMag = mag;
+            }
+        }
+
+        // Draw grid cells as Hinton diagram squares with phase arrows
+        for (let row = 0; row < dim; row++) {
+            for (let col = 0; col < dim; col++) {
+                const cellX = gridX + col * cellSize;
+                const cellY = gridY + row * cellSize;
+
+                // ρ_{row,col} = ψ_row × conj(ψ_col)
+                const ampRow = state.amplitudes[row];
+                const ampCol = state.amplitudes[col];
+                const re = ampRow.re * ampCol.re + ampRow.im * ampCol.im;
+                const im = ampRow.im * ampCol.re - ampRow.re * ampCol.im;
+                const mag = Math.sqrt(re * re + im * im);
+                const phase = Math.atan2(im, re);
+
+                // Draw cell background
+                ctx.fillStyle = 'rgba(30, 30, 40, 0.5)';
+                ctx.fillRect(cellX, cellY, cellSize - 0.5, cellSize - 0.5);
+
+                if (mag > 1e-10) {
+                    // Square size proportional to magnitude
+                    const scale = maxMag > 0 ? Math.sqrt(mag / maxMag) : 0;
+                    const squareSize = scale * (cellSize - 4);
+
+                    // Neutral color for square (light blue-gray)
+                    ctx.fillStyle = 'rgba(120, 160, 200, 0.8)';
+
+                    // Draw centered square
+                    const centerX = cellX + cellSize / 2;
+                    const centerY = cellY + cellSize / 2;
+                    const halfSize = squareSize / 2;
+                    ctx.fillRect(centerX - halfSize, centerY - halfSize, squareSize, squareSize);
+
+                    // Draw phase arrow if square is large enough
+                    if (squareSize > 8) {
+                        const arrowLength = squareSize * 0.35;
+                        const arrowHeadSize = Math.max(3, squareSize * 0.12);
+
+                        // Arrow points in direction of phase (0 = right, π/2 = up)
+                        const endX = centerX + Math.cos(phase) * arrowLength;
+                        const endY = centerY - Math.sin(phase) * arrowLength; // Negative because canvas Y is inverted
+
+                        // Draw arrow line
+                        ctx.strokeStyle = '#1a1a2e';
+                        ctx.lineWidth = Math.max(1.5, squareSize * 0.06);
+                        ctx.lineCap = 'round';
+                        ctx.beginPath();
+                        ctx.moveTo(centerX, centerY);
+                        ctx.lineTo(endX, endY);
+                        ctx.stroke();
+
+                        // Draw arrow head
+                        const headAngle = Math.PI / 6; // 30 degrees
+                        ctx.beginPath();
+                        ctx.moveTo(endX, endY);
+                        ctx.lineTo(
+                            endX - arrowHeadSize * Math.cos(phase - headAngle),
+                            endY + arrowHeadSize * Math.sin(phase - headAngle)
+                        );
+                        ctx.moveTo(endX, endY);
+                        ctx.lineTo(
+                            endX - arrowHeadSize * Math.cos(phase + headAngle),
+                            endY + arrowHeadSize * Math.sin(phase + headAngle)
+                        );
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        // Draw grid border
+        ctx.strokeStyle = 'rgba(100, 150, 200, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(gridX, gridY, gridWidth, gridHeight);
+
+        // Draw row labels (left) - binary kets
+        ctx.fillStyle = '#888';
+        const fontSize = Math.min(10, Math.max(7, cellSize * 0.4));
+        ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+
+        const labelStep = dim > 16 ? Math.ceil(dim / 8) : 1;
+        for (let i = 0; i < dim; i += labelStep) {
+            const label = '|' + i.toString(2).padStart(n, '0') + '⟩';
+            ctx.fillText(label, gridX - 4, gridY + i * cellSize + cellSize / 2);
+        }
+
+        // Draw column labels (top) - binary kets rotated
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        for (let j = 0; j < dim; j += labelStep) {
+            const label = '⟨' + j.toString(2).padStart(n, '0') + '|';
+            ctx.save();
+            ctx.translate(gridX + j * cellSize + cellSize / 2, gridY - 4);
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillText(label, 0, 0);
+            ctx.restore();
+        }
+        ctx.restore();
+
+        // Draw legend - phase arrow compass
+        const legendY = gridY + gridHeight + 12;
+        const compassRadius = 20;
+        const compassX = x + w / 2 - 60;
+        const compassY = legendY + compassRadius + 3;
+
+        // Draw compass circle
+        ctx.strokeStyle = 'rgba(100, 150, 200, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(compassX, compassY, compassRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Draw compass arrows with labels
+        ctx.strokeStyle = '#888';
+        ctx.fillStyle = '#888';
+        ctx.lineWidth = 1.5;
+        ctx.font = '9px "Inter", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Right arrow (phase = 0)
+        ctx.beginPath();
+        ctx.moveTo(compassX, compassY);
+        ctx.lineTo(compassX + compassRadius - 2, compassY);
+        ctx.stroke();
+        ctx.fillText('0', compassX + compassRadius + 10, compassY);
+
+        // Up arrow (phase = π/2)
+        ctx.beginPath();
+        ctx.moveTo(compassX, compassY);
+        ctx.lineTo(compassX, compassY - compassRadius + 2);
+        ctx.stroke();
+        ctx.fillText('π/2', compassX, compassY - compassRadius - 8);
+
+        // Left arrow (phase = π)
+        ctx.beginPath();
+        ctx.moveTo(compassX, compassY);
+        ctx.lineTo(compassX - compassRadius + 2, compassY);
+        ctx.stroke();
+        ctx.fillText('±π', compassX - compassRadius - 12, compassY);
+
+        // Down arrow (phase = -π/2)
+        ctx.beginPath();
+        ctx.moveTo(compassX, compassY);
+        ctx.lineTo(compassX, compassY + compassRadius - 2);
+        ctx.stroke();
+        ctx.fillText('-π/2', compassX, compassY + compassRadius + 8);
+
+        // Size legend
+        ctx.fillStyle = '#888';
+        ctx.font = '10px "Inter", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Size ∝ |ρᵢⱼ|', compassX + compassRadius + 30, compassY - 8);
+        ctx.fillText('Arrow → phase', compassX + compassRadius + 30, compassY + 8);
+    }
+
+    /**
+     * Draw state vector in ket notation
+     * Shows |ψ⟩ = Σ αᵢ|i⟩ with complex coefficients (a+bi)
+     * @private
+     */
+    _drawKetNotationContent(ctx, x, y, w, h) {
+        if (!this._currentState) return;
+
+        const state = this._currentState;
+        const dim = state.dimension;
+        const n = state.numQubits;
+
+        // Collect non-zero amplitudes
+        const terms = [];
+        const threshold = 1e-10;
+        for (let i = 0; i < dim; i++) {
+            const amp = state.amplitudes[i];
+            const mag = Math.sqrt(amp.re * amp.re + amp.im * amp.im);
+            if (mag > threshold) {
+                terms.push({
+                    index: i,
+                    re: amp.re,
+                    im: amp.im,
+                    mag: mag
+                });
+            }
+        }
+
+        // Sort by magnitude (descending)
+        terms.sort((a, b) => b.mag - a.mag);
+
+        if (terms.length === 0) {
+            ctx.fillStyle = '#888';
+            ctx.font = '14px "Inter", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('|ψ⟩ = 0', x + w / 2, y + h / 2);
+            return;
+        }
+
+        // Calculate font size to fit all terms
+        const padding = 10;
+        const lineHeight = 24;
+        const maxLines = Math.floor((h - padding * 2) / lineHeight);
+
+        // Calculate how many terms per line we can fit
+        const avgTermWidth = 120; // Rough estimate
+        const termsPerLine = Math.max(1, Math.floor((w - padding * 2) / avgTermWidth));
+        const numLines = Math.ceil(terms.length / termsPerLine);
+
+        // Scale font if needed to fit
+        let fontSize = 14;
+        if (numLines > maxLines) {
+            // Need to shrink font and increase terms per line
+            fontSize = Math.max(9, Math.floor(14 * maxLines / numLines));
+        }
+
+        ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+
+        // Format complex number as string
+        const formatComplex = (re, im) => {
+            const reStr = Math.abs(re) < threshold ? '' : re.toFixed(3);
+            const imStr = Math.abs(im) < threshold ? '' :
+                          (im >= 0 && reStr ? '+' : '') + im.toFixed(3) + 'i';
+
+            if (!reStr && !imStr) return '0';
+            if (!imStr) return reStr;
+            if (!reStr) return imStr;
+            return reStr + imStr;
+        };
+
+        // Build the ket expression line by line
+        let currentLine = '|ψ⟩ = ';
+        const lines = [];
+        let isFirstTerm = true;
+
+        for (const term of terms) {
+            const ket = '|' + term.index.toString(2).padStart(n, '0') + '⟩';
+            const coeff = formatComplex(term.re, term.im);
+
+            // Determine sign/prefix for this term
+            let termStr;
+            if (isFirstTerm) {
+                // Check if coefficient needs parentheses (has both re and im)
+                if (Math.abs(term.re) > threshold && Math.abs(term.im) > threshold) {
+                    termStr = `(${coeff})${ket}`;
+                } else {
+                    termStr = `${coeff}${ket}`;
+                }
+            } else {
+                // Add + or - prefix based on the term
+                if (Math.abs(term.im) > threshold && Math.abs(term.re) > threshold) {
+                    // Complex with both parts - use parentheses
+                    termStr = ` + (${coeff})${ket}`;
+                } else if (term.re < -threshold || (Math.abs(term.re) < threshold && term.im < -threshold)) {
+                    // Negative real or pure negative imaginary
+                    const absCoeff = formatComplex(Math.abs(term.re), Math.abs(term.im));
+                    termStr = ` - ${absCoeff}${ket}`;
+                } else {
+                    termStr = ` + ${coeff}${ket}`;
+                }
+            }
+
+            // Check if adding this term would exceed line width
+            const testLine = currentLine + termStr;
+            const testWidth = ctx.measureText(testLine).width;
+
+            if (testWidth > w - padding * 2 && currentLine !== '|ψ⟩ = ') {
+                lines.push(currentLine);
+                currentLine = '  ' + termStr.trim();
+                // Remove leading + from continuation
+                if (currentLine.startsWith('  +')) {
+                    currentLine = '  ' + currentLine.substring(3).trim();
+                }
+            } else {
+                currentLine = testLine;
+            }
+
+            isFirstTerm = false;
+        }
+
+        // Add final line
+        if (currentLine.trim()) {
+            lines.push(currentLine);
+        }
+
+        // Render lines - scale down further if needed
+        const totalNeededHeight = lines.length * lineHeight + padding * 2;
+        if (totalNeededHeight > h) {
+            const scaleFactor = (h - padding * 2) / (lines.length * lineHeight);
+            fontSize = Math.max(8, Math.floor(fontSize * scaleFactor));
+            ctx.font = `${fontSize}px "JetBrains Mono", monospace`;
+        }
+
+        const actualLineHeight = Math.min(lineHeight, (h - padding * 2) / lines.length);
+        const startY = y + padding + actualLineHeight / 2;
+
+        ctx.fillStyle = '#e8e8e8';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+
+        for (let i = 0; i < lines.length; i++) {
+            const lineY = startY + i * actualLineHeight;
+            if (lineY + actualLineHeight / 2 > y + h - padding) break;
+            ctx.fillText(lines[i], x + padding, lineY);
+        }
+
+        // Show count info at bottom if truncated
+        if (terms.length > 0) {
+            ctx.fillStyle = '#666';
+            ctx.font = '10px "Inter", sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(`${terms.length} non-zero terms`, x + w - padding, y + h - 5);
+        }
+    }
+
+    /**
      * Draw the view toggle button
      * @private
      */
@@ -987,7 +1501,9 @@ export class ExpandedStateView {
 
         const viewNames = {
             'pauli': 'Pauli Matrix',
-            'vector': 'State Vector',
+            'density': 'Density Matrix',
+            'ket': 'Ket Notation',
+            'vector': 'State Bars',
             'correlation': 'Correlations'
         };
         const currentIndex = this.viewOrder.indexOf(this.currentView);

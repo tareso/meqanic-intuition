@@ -288,13 +288,17 @@ function handleMouseDown(e) {
 function handleMouseMove(e) {
     const pos = getEventPosition(e);
 
-    // Handle expanded view mouse move (dragging and tooltips)
+    // Handle expanded view mouse move (dragging, resizing, and tooltips)
     if (state.expandedStateView.isVisible) {
-        // Check if window is being dragged
-        if (state.expandedStateView.handleMouseMove(pos.x, pos.y, state.canvas.width, state.canvas.height)) {
-            return; // Window is being dragged
+        const result = state.expandedStateView.handleMouseMove(pos.x, pos.y, state.canvas.width, state.canvas.height);
+        // Update cursor based on resize edge or drag state
+        state.canvas.style.cursor = result.cursor;
+        if (result.handled) {
+            return; // Window is being dragged or resized
         }
-        // Not dragging window - continue to allow qubit dragging
+        // Not dragging/resizing window - continue to allow qubit dragging
+    } else {
+        state.canvas.style.cursor = 'default';
     }
 
     // Update Pauli dome hover state
@@ -306,12 +310,13 @@ function handleMouseMove(e) {
 }
 
 function handleMouseUp(e) {
-    // Handle expanded view mouse up (stop window dragging and handle clicks)
+    // Handle expanded view mouse up (stop window dragging/resizing and handle clicks)
     if (state.expandedStateView.isVisible) {
-        const wasDragging = state.expandedStateView.isDragging;
+        const wasDragging = state.expandedStateView.isDragging || state.expandedStateView.isResizing;
         state.expandedStateView.handleMouseUp();
+        state.canvas.style.cursor = 'default';
 
-        // If we weren't dragging, handle as a click for buttons
+        // If we weren't dragging/resizing, handle as a click for buttons
         if (!wasDragging && e) {
             const pos = getEventPosition(e);
             state.expandedStateView.handleClick(pos.x, pos.y);
